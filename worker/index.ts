@@ -1665,6 +1665,11 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		delivery_type: 'delivery',
 		status: 'pending',
 		
+		// Required top-level fields
+		address: getField('address', ''),
+		phone: cleanPhoneNumber(getField('recipientPhoneNo', '')),
+		recipient_name: `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
+		
 		// Required shipping address structure
 		shipping_address: {
 			address1: getField('address', ''),
@@ -1786,9 +1791,11 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 			time: "09:00",
 			delivery_type: "delivery",
 			status: "pending",
+			address: "Test Address",
+			phone: "12345678",
+			recipient_name: "Test Recipient",
 			order_number: "TEST-CONNECTION",
 			updated_at: new Date().toISOString(), // Use proper ISO timestamp format
-			
 			shipping_address: {
 				address1: "Test Address",
 				postal_code: "123456",
