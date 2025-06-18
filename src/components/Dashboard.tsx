@@ -442,10 +442,7 @@ export function Dashboard() {
       console.log('Fetch response:', data)
       
       if (data.success) {
-        // Refresh orders from database
-        await loadOrdersFromDatabase()
-        
-        // Show results summary
+        // Show results summary first
         if (data.results && data.results.length > 0) {
           const summary = data.results.map((r: any) => 
             `${r.storeName}: fetched ${r.fetched}, saved ${r.saved}${r.errors.length ? ", errors: " + r.errors.join('; ') : ''}`
@@ -454,6 +451,14 @@ export function Dashboard() {
         } else {
           setFetchResult('No stores configured. Please add Shopify stores in Settings first.')
         }
+        
+        // Add a small delay to ensure database updates are complete
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Refresh orders from database, reset to page 1 to see newest orders
+        console.log('Refreshing orders from database after fetch...')
+        await loadOrdersFromDatabase(1, pageSize)
+        
       } else {
         setFetchResult('Failed to fetch orders: ' + (data.error || 'Unknown error'))
       }
@@ -484,8 +489,8 @@ export function Dashboard() {
         
         await Promise.all(deletePromises)
         
-        // Refresh orders from database
-        await loadOrdersFromDatabase()
+        // Refresh orders from database, reset to page 1
+        await loadOrdersFromDatabase(1, pageSize)
         
         // Clear selection
         setSelectedOrders(new Set())
@@ -523,8 +528,8 @@ export function Dashboard() {
         console.log('Clear all response data:', responseData)
         
         console.log('Refreshing orders from database...')
-        // Refresh orders from database
-        await loadOrdersFromDatabase()
+        // Refresh orders from database, reset to page 1
+        await loadOrdersFromDatabase(1, pageSize)
         
         // Clear selection
         setSelectedOrders(new Set())
@@ -562,8 +567,8 @@ export function Dashboard() {
         const responseData = await response.json()
         console.log('Reprocess response data:', responseData)
         
-        // Refresh orders from database
-        await loadOrdersFromDatabase()
+        // Refresh orders from database, reset to page 1
+        await loadOrdersFromDatabase(1, pageSize)
         
         // Show success message
         setFetchResult('Successfully reprocessed all orders from Shopify')
