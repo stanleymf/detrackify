@@ -1710,7 +1710,7 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		
 		// Additional required fields from validation error
 		order_number: getField('deliveryOrderNo', orderName).replace('#', ''),
-		updated_at: new Date().toISOString(),
+		updated_at: getDeliveryDate(), // Use delivery date instead of current timestamp
 		line_items: [{
 			title: getField('description', ''),
 			quantity: parseInt(getField('qty', '1')),
@@ -1823,7 +1823,7 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 			delivery_type: "delivery",
 			admin_graphql_api_id: "TEST-ORDER-123",
 			order_number: "TEST-CONNECTION",
-			updated_at: new Date().toISOString(),
+			updated_at: new Date().toLocaleDateString('en-GB'), // Use delivery date format
 			line_items: [{
 				title: "Test Item",
 				quantity: 1,
