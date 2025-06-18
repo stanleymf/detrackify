@@ -47,9 +47,9 @@ CREATE TABLE extract_processing_mappings (
   id TEXT PRIMARY KEY,
   store_id TEXT, -- Allow NULL for global mappings
   dashboard_field TEXT NOT NULL,
-  processing_type TEXT NOT NULL, -- 'date', 'time', 'description', 'itemCount'
-  source_field TEXT NOT NULL,
-  format TEXT,
+  processing_type TEXT NOT NULL, -- 'date', 'time', 'group', 'itemCount', 'description'
+  source_field TEXT NOT NULL, -- e.g., 'order.tags', 'order.name', 'line_items'
+  format TEXT NOT NULL, -- e.g., 'dd/mm/yyyy', 'first_two_letters', 'sum_quantities'
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
@@ -85,6 +85,17 @@ CREATE TABLE webhook_events (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   processed_at DATETIME,
   FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE
+);
+
+-- Detrack configuration table
+CREATE TABLE detrack_config (
+  id TEXT PRIMARY KEY,
+  api_key TEXT NOT NULL,
+  api_secret TEXT NOT NULL,
+  base_url TEXT DEFAULT 'https://api.detrack.com/v2',
+  is_enabled BOOLEAN DEFAULT FALSE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for better performance

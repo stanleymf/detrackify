@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Store Breakdown Calculation** - Fixed store breakdown stat card to count unique orders instead of line items per store prefix
+
 ### Planned
 - Shopify OAuth flow for store connection
 - Order dashboard with real-time data

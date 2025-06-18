@@ -37,15 +37,15 @@ export function Settings() {
     extractProcessingMappings: []
   })
   const [isAddStoreOpen, setIsAddStoreOpen] = useState(false)
-  const [newStore, setNewStore] = useState({ name: "", url: "", apiKey: "" })
+  const [newStore, setNewStore] = useState({ name: "", url: "", apiKey: "", apiSecret: "" })
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle")
+  const [editingStore, setEditingStore] = useState<{ id: string, name: string, url: string, apiKey: string, apiSecret: string } | null>(null)
   
   // Detrack integration state
   const [detrackConfig, setDetrackConfig] = useState({
     apiKey: "",
-    apiSecret: "",
-    baseUrl: "https://api.detrack.com/v2",
+    baseUrl: "https://app.detrack.com/api/v1",
     isEnabled: false
   })
 
@@ -108,38 +108,73 @@ export function Settings() {
     }
   }
 
-  const loadDetrackConfig = () => {
-    const savedConfig = localStorage.getItem('detrack-config')
-    if (savedConfig) {
-      setDetrackConfig(JSON.parse(savedConfig))
+  const loadDetrackConfig = async () => {
+    try {
+      const response = await fetch('/api/detrack/config', { credentials: 'include' })
+      if (response.ok) {
+        const config = await response.json()
+        setDetrackConfig({
+          apiKey: config.apiKey || '',
+          baseUrl: config.baseUrl || 'https://app.detrack.com/api/v1',
+          isEnabled: config.isEnabled || false
+        })
+      }
+    } catch (error) {
+      console.error('Error loading Detrack config:', error)
     }
   }
 
-  const saveDetrackConfig = () => {
-    localStorage.setItem('detrack-config', JSON.stringify(detrackConfig))
-    setSaveStatus("success")
-    setTimeout(() => setSaveStatus("idle"), 3000)
+  const saveDetrackConfig = async () => {
+    try {
+      const response = await fetch('/api/detrack/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(detrackConfig),
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        setSaveStatus("success")
+        setTimeout(() => setSaveStatus("idle"), 3000)
+      } else {
+        setSaveStatus("error")
+        setTimeout(() => setSaveStatus("idle"), 3000)
+      }
+    } catch (error) {
+      console.error('Error saving Detrack config:', error)
+      setSaveStatus("error")
+      setTimeout(() => setSaveStatus("idle"), 3000)
+    }
   }
 
   const testDetrackConnection = async () => {
     try {
-      // Test the Detrack API connection
-      const response = await fetch(`${detrackConfig.baseUrl}/delivery_jobs`, {
-        method: 'GET',
+      console.log('Testing Detrack connection...')
+      
+      // Test the Detrack API connection through our backend
+      const response = await fetch('/api/detrack/test', {
+        method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'X-API-KEY': detrackConfig.apiKey,
-          'X-API-SECRET': detrackConfig.apiSecret
-        }
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
       })
+      
+      console.log('Test connection response status:', response.status)
       
       if (response.ok) {
         alert('Detrack connection successful!')
       } else {
-        alert('Detrack connection failed. Please check your API credentials.')
+        const errorData = await response.json()
+        console.error('Detrack connection error:', errorData)
+        alert(`Detrack connection failed: ${errorData.error || 'Unknown error'}`)
       }
     } catch (error) {
-      alert('Error testing Detrack connection. Please check your configuration.')
+      console.error('Error testing Detrack connection:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      alert(`Error testing Detrack connection: ${errorMessage}`)
     }
   }
 
@@ -157,8 +192,9 @@ export function Settings() {
           store_name: newStore.name,
           shopify_domain: newStore.url,
           access_token: newStore.apiKey,
+          api_secret: newStore.apiSecret,
           api_version: '2024-01', // Default API version
-          webhook_secret: '' // Will be set when webhook is configured
+          webhook_secret: crypto.randomUUID() // Generate a proper webhook secret
         }),
         credentials: 'include'
       })
@@ -180,7 +216,7 @@ export function Settings() {
           shopifyStores: [...prev.shopifyStores, frontendStore]
         }))
         
-        setNewStore({ name: "", url: "", apiKey: "" })
+        setNewStore({ name: "", url: "", apiKey: "", apiSecret: "" })
         setIsAddStoreOpen(false)
       } else {
         console.error('Failed to create store:', await response.text())
@@ -209,6 +245,67 @@ export function Settings() {
       }
     } catch (error) {
       console.error('Error deleting store:', error)
+    }
+  }
+
+  const handleRegisterWebhook = async (storeId: string) => {
+    try {
+      const response = await fetch(`/api/stores/${storeId}/register-webhook`, {
+        method: 'POST',
+        credentials: 'include'
+      })
+      const data = await response.json()
+      if (response.ok) {
+        alert('Webhook registered successfully!')
+      } else {
+        alert('Failed to register webhook: ' + (data.error || JSON.stringify(data)))
+      }
+    } catch (error) {
+      console.error('Error registering webhook:', error)
+      alert('Error registering webhook: ' + error)
+    }
+  }
+
+  const handleEditStore = async () => {
+    if (!editingStore) return
+
+    try {
+      const response = await fetch(`/api/stores/${editingStore.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          store_name: editingStore.name,
+          shopify_domain: editingStore.url,
+          access_token: editingStore.apiKey,
+          api_secret: editingStore.apiSecret
+        }),
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        // Update frontend state
+        setSettings(prev => ({
+          ...prev,
+          shopifyStores: prev.shopifyStores.map(store => 
+            store.id === editingStore.id 
+              ? { ...store, name: editingStore.name, url: editingStore.url, apiKey: editingStore.apiKey }
+              : store
+          )
+        }))
+        setEditingStore(null)
+        setSaveStatus("success")
+        setTimeout(() => setSaveStatus("idle"), 3000)
+      } else {
+        console.error('Failed to update store:', await response.text())
+        setSaveStatus("error")
+        setTimeout(() => setSaveStatus("idle"), 3000)
+      }
+    } catch (error) {
+      console.error('Error updating store:', error)
+      setSaveStatus("error")
+      setTimeout(() => setSaveStatus("idle"), 3000)
     }
   }
 
@@ -359,6 +456,19 @@ export function Settings() {
                       placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="api-secret">API Secret (Private App)</Label>
+                    <Input
+                      id="api-secret"
+                      type="password"
+                      value={newStore.apiSecret}
+                      onChange={(e) => setNewStore({ ...newStore, apiSecret: e.target.value })}
+                      placeholder="shpss_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Get this from your Shopify store's Private App settings
+                    </p>
+                  </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setIsAddStoreOpen(false)}>
                       Cancel
@@ -387,21 +497,108 @@ export function Settings() {
                   key={store.id}
                   className="flex items-center justify-between p-4 border rounded-lg"
                 >
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <h3 className="font-medium">{store.name}</h3>
-                      <p className="text-sm text-muted-foreground">{store.url}</p>
+                  {editingStore?.id === store.id ? (
+                    // Edit mode
+                    <div className="w-full space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor={`edit-name-${store.id}`}>Store Name</Label>
+                          <Input
+                            id={`edit-name-${store.id}`}
+                            value={editingStore.name}
+                            onChange={(e) => setEditingStore({ ...editingStore, name: e.target.value })}
+                            placeholder="My Shopify Store"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`edit-url-${store.id}`}>Store URL</Label>
+                          <Input
+                            id={`edit-url-${store.id}`}
+                            value={editingStore.url}
+                            onChange={(e) => setEditingStore({ ...editingStore, url: e.target.value })}
+                            placeholder="mystore.myshopify.com"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`edit-api-key-${store.id}`}>API Key</Label>
+                          <Input
+                            id={`edit-api-key-${store.id}`}
+                            type="password"
+                            value={editingStore.apiKey}
+                            onChange={(e) => setEditingStore({ ...editingStore, apiKey: e.target.value })}
+                            placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`edit-api-secret-${store.id}`}>API Secret (Private App)</Label>
+                          <Input
+                            id={`edit-api-secret-${store.id}`}
+                            type="password"
+                            value={editingStore.apiSecret}
+                            onChange={(e) => setEditingStore({ ...editingStore, apiSecret: e.target.value })}
+                            placeholder="shpss_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Get this from your Shopify store's Private App settings
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setEditingStore(null)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleEditStore}
+                          className="bg-olive-600 hover:bg-olive-700 text-white"
+                        >
+                          Save Changes
+                        </Button>
+                      </div>
                     </div>
-                    <Badge className="bg-success text-success-foreground">Connected</Badge>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRemoveStore(store.id)}
-                    className="text-error hover:text-error"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  ) : (
+                    // Normal view
+                    <>
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <h3 className="font-medium">{store.name}</h3>
+                          <p className="text-sm text-muted-foreground">{store.url}</p>
+                        </div>
+                        <Badge className="bg-success text-success-foreground">Connected</Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingStore({
+                            id: store.id,
+                            name: store.name,
+                            url: store.url,
+                            apiKey: store.apiKey,
+                            apiSecret: "" // We don't show the current secret for security
+                          })}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRemoveStore(store.id)}
+                          className="text-error hover:text-error"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRegisterWebhook(store.id)}
+                          className="text-olive-600 hover:text-olive-700"
+                        >
+                          Register Webhook
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -419,7 +616,7 @@ export function Settings() {
                 Detrack Integration
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Configure your Detrack API credentials to enable order export functionality.
+                Configure your Detrack API key to enable order export functionality.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -431,27 +628,18 @@ export function Settings() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="detrack-api-key">API Key</Label>
-                <Input
-                  id="detrack-api-key"
-                  type="password"
-                  value={detrackConfig.apiKey}
-                  onChange={(e) => setDetrackConfig({ ...detrackConfig, apiKey: e.target.value })}
-                  placeholder="Your Detrack API Key"
-                />
-              </div>
-              <div>
-                <Label htmlFor="detrack-api-secret">API Secret</Label>
-                <Input
-                  id="detrack-api-secret"
-                  type="password"
-                  value={detrackConfig.apiSecret}
-                  onChange={(e) => setDetrackConfig({ ...detrackConfig, apiSecret: e.target.value })}
-                  placeholder="Your Detrack API Secret"
-                />
-              </div>
+            <div>
+              <Label htmlFor="detrack-api-key">API Key</Label>
+              <Input
+                id="detrack-api-key"
+                type="password"
+                value={detrackConfig.apiKey}
+                onChange={(e) => setDetrackConfig({ ...detrackConfig, apiKey: e.target.value })}
+                placeholder="Your Detrack API Key"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                This is the only credential required for Detrack integration. Get this from your Detrack account settings.
+              </p>
             </div>
             
             <div>
@@ -460,10 +648,10 @@ export function Settings() {
                 id="detrack-base-url"
                 value={detrackConfig.baseUrl}
                 onChange={(e) => setDetrackConfig({ ...detrackConfig, baseUrl: e.target.value })}
-                placeholder="https://api.detrack.com/v2"
+                placeholder="https://connect.detrack.com/api/v1/"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Default: https://api.detrack.com/v2 (Detrack API v2)
+                Default: https://connect.detrack.com/api/v1/ (Detrack V1 API)
               </p>
             </div>
 
@@ -489,7 +677,7 @@ export function Settings() {
               <Button
                 onClick={testDetrackConnection}
                 variant="outline"
-                disabled={!detrackConfig.apiKey || !detrackConfig.apiSecret}
+                disabled={!detrackConfig.apiKey}
               >
                 Test Connection
               </Button>

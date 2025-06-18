@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Settings2, Eye, Calendar, Clock, RefreshCw } from "lucide-react"
+import { Eye, Calendar, Clock, RefreshCw } from "lucide-react"
 import { type Order, DASHBOARD_FIELD_LABELS, type DashboardColumnConfig } from "@/types"
 import { storage } from "@/lib/storage"
 
@@ -40,6 +40,12 @@ export function Dashboard() {
   // Fetch orders loading state
   const [fetchingOrders, setFetchingOrders] = useState(false)
   const [fetchResult, setFetchResult] = useState<string | null>(null)
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(50) // 50 orders per page
+  const [totalOrderCount, setTotalOrderCount] = useState(0)
+  const [loadingOrders, setLoadingOrders] = useState(false)
 
   // Filter states
   const [selectedDate, setSelectedDate] = useState<string>("all")
@@ -63,10 +69,7 @@ export function Dashboard() {
     }
   }, [])
 
-  useEffect(() => {
-    const loadedOrders = storage.getOrders()
-    setOrders(loadedOrders)
-  }, [])
+  // Orders are now loaded from database via loadOrdersFromDatabase()
 
   // Auto-save column configuration when it changes
   useEffect(() => {
@@ -76,7 +79,7 @@ export function Dashboard() {
   }, [columnConfigs])
 
   // Filter orders based on date and timeslot
-  const filteredOrders = orders.filter((order) => {
+  const filteredOrders = Array.isArray(orders) ? orders.filter((order) => {
     const deliveryDate = order.deliveryDate
     const timeWindow = order.deliveryCompletionTimeWindow
 
@@ -91,11 +94,11 @@ export function Dashboard() {
     }
 
     return true
-  })
+  }) : []
 
   // Get unique dates and timeslots for filter options
-  const uniqueDates = Array.from(new Set(orders.map(order => order.deliveryDate).filter(Boolean)))
-  const uniqueTimeslots = Array.from(new Set(orders.map(order => order.deliveryCompletionTimeWindow).filter(Boolean)))
+  const uniqueDates = Array.isArray(orders) ? Array.from(new Set(orders.map(order => order.deliveryDate).filter(Boolean))) : []
+  const uniqueTimeslots = Array.isArray(orders) ? Array.from(new Set(orders.map(order => order.deliveryCompletionTimeWindow).filter(Boolean))) : []
 
   const handleSelectOrder = (orderId: string, checked: boolean) => {
     const newSelected = new Set(selectedOrders)
@@ -124,9 +127,9 @@ export function Dashboard() {
   const handleCellSave = () => {
     if (!editingCell) return
 
-    storage.updateOrder(editingCell.orderId, { [editingCell.field]: editValue })
-    const updatedOrders = storage.getOrders()
-    setOrders(updatedOrders)
+    // TODO: Update order in database instead of localStorage
+    // For now, just refresh from database
+    loadOrdersFromDatabase()
     setEditingCell(null)
     setEditValue("")
   }
@@ -145,40 +148,59 @@ export function Dashboard() {
   }
 
   const handleExportToDetrack = async () => {
-    const selectedOrdersList = orders.filter((order) => selectedOrders.has(order.id))
-
-    // Simulate API call to Detrack
-    for (const order of selectedOrdersList) {
-      try {
-        // Mock API call - in real implementation, this would call Detrack API
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        // Simulate success/failure randomly for demo
-        const success = Math.random() > 0.1 // 90% success rate
-
-        if (success) {
-          storage.updateOrder(order.id, {
-            status: "Exported",
-            remarks: "Successfully exported to Detrack",
-          })
-        } else {
-          storage.updateOrder(order.id, {
-            status: "Error",
-            remarks: "Failed to export - API connection error",
-          })
-        }
-      } catch (error) {
-        storage.updateOrder(order.id, {
-          status: "Error",
-          remarks: "Export failed - network error",
-        })
-      }
+    // Safety check to ensure orders is an array
+    if (!Array.isArray(orders)) {
+      console.error('Orders is not an array:', orders)
+      alert('Error: Orders data is not properly loaded. Please refresh the page.')
+      return
     }
 
-    // Refresh orders and clear selection
-    const updatedOrders = storage.getOrders()
-    setOrders(updatedOrders)
-    setSelectedOrders(new Set())
+    const selectedOrdersList = orders.filter((order) => selectedOrders.has(order.id))
+    
+    if (selectedOrdersList.length === 0) {
+      alert('No orders selected for export')
+      return
+    }
+
+    try {
+      console.log(`Exporting ${selectedOrdersList.length} orders to Detrack...`)
+      
+      // Call the real API endpoint
+      const response = await fetch('/api/export/detrack', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderIds: selectedOrdersList.map(order => order.id)
+        }),
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('Export result:', result)
+
+      if (result.success) {
+        // Show success message with summary
+        const summary = result.summary
+        alert(`Export completed!\n\nTotal: ${summary.total}\nSuccess: ${summary.success}\nErrors: ${summary.errors}`)
+        
+        // Refresh orders to show updated statuses
+        await loadOrdersFromDatabase()
+        setSelectedOrders(new Set())
+      } else {
+        throw new Error('Export failed')
+      }
+
+    } catch (error) {
+      console.error('Error exporting to Detrack:', error)
+      alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   const handleColumnVisibilityChange = (field: keyof Order, visible: boolean) => {
@@ -276,23 +298,125 @@ export function Dashboard() {
   }
 
   const visibleColumns = columnConfigs.filter((config) => config.visible)
-  const totalOrders = filteredOrders.length
-  const readyForExport = filteredOrders.filter((order) => order.status === "Ready for Export").length
-  const exported = filteredOrders.filter((order) => order.status === "Exported").length
-  const errors = filteredOrders.filter((order) => order.status === "Error").length
+  
+  // Calculate stats based on unique orders (not line items)
+  const uniqueOrderIds = new Set(filteredOrders.map(order => {
+    // Extract base order ID from line item ID (format: "orderId-index")
+    const baseOrderId = order.id.includes('-') ? order.id.split('-')[0] : order.id
+    return baseOrderId
+  }))
+  
+  const totalOrders = uniqueOrderIds.size
+  
+  // Count statuses based on unique orders
+  const orderStatusMap = new Map<string, string>()
+  filteredOrders.forEach(order => {
+    const baseOrderId = order.id.includes('-') ? order.id.split('-')[0] : order.id
+    // Only update if we haven't seen this order before, or if current status is more important
+    if (!orderStatusMap.has(baseOrderId) || order.status === 'Error') {
+      orderStatusMap.set(baseOrderId, order.status)
+    }
+  })
+  
+  const errors = Array.from(orderStatusMap.values()).filter(status => status === "Error").length
+
+  // Calculate orders by store prefix
+  const storeBreakdown = new Map<string, number>()
+  
+  // Group orders by base order ID to count unique orders
+  const uniqueOrders = new Map<string, Order>()
+  filteredOrders.forEach(order => {
+    const baseOrderId = order.id.includes('-') ? order.id.split('-')[0] : order.id
+    if (!uniqueOrders.has(baseOrderId)) {
+      uniqueOrders.set(baseOrderId, order)
+    }
+  })
+  
+  // Count unique orders by store prefix
+  uniqueOrders.forEach(order => {
+    const orderNumber = order.deliveryOrderNo || ''
+    
+    // Extract prefix from order number (e.g., "#WF" from "#WF10000")
+    const prefixMatch = orderNumber.match(/^#([A-Z]+)/)
+    const prefix = prefixMatch ? prefixMatch[1] : 'Unknown'
+    
+    if (!storeBreakdown.has(prefix)) {
+      storeBreakdown.set(prefix, 0)
+    }
+    storeBreakdown.set(prefix, storeBreakdown.get(prefix)! + 1)
+  })
+  
+  // Convert to sorted array for display
+  const storeBreakdownArray = Array.from(storeBreakdown.entries())
+    .sort((a, b) => b[1] - a[1]) // Sort by count descending
+    .slice(0, 3) // Show top 3 stores
+
+  // Calculate Express orders
+  const expressOrders = filteredOrders.filter(order => {
+    const description = (order.description || '').toLowerCase()
+    return description.includes('express')
+  })
+
+  // Group express orders by unique order (to avoid duplicates from line items)
+  const uniqueExpressOrders = new Map<string, { deliveryOrderNo: string; fullLineItem: string }>()
+  expressOrders.forEach(order => {
+    const baseOrderId = order.id.includes('-') ? order.id.split('-')[0] : order.id
+    if (!uniqueExpressOrders.has(baseOrderId)) {
+      uniqueExpressOrders.set(baseOrderId, {
+        deliveryOrderNo: order.deliveryOrderNo || '',
+        fullLineItem: order.description || '' // This contains the full line item title + variant title
+      })
+    }
+  })
+  
+  const expressOrdersArray = Array.from(uniqueExpressOrders.values())
 
   // Load orders from database
-  const loadOrdersFromDatabase = async () => {
+  const loadOrdersFromDatabase = async (page = currentPage, size = pageSize) => {
     try {
-      const response = await fetch('/api/orders', { credentials: 'include' })
+      setLoadingOrders(true)
+      console.log(`Loading orders from database... page ${page}, size ${size}`)
+      
+      const offset = (page - 1) * size
+      const response = await fetch(`/api/orders?limit=${size}&offset=${offset}`, { credentials: 'include' })
+      console.log('Load orders response status:', response.status)
+      
       if (response.ok) {
-        const orders = await response.json()
-        setOrders(orders)
+        const data = await response.json()
+        console.log('Orders loaded from database:', data)
+        
+        // Handle both array response (current) and object response (legacy)
+        let ordersArray: Order[]
+        let totalCount: number
+        
+        if (Array.isArray(data)) {
+          // Current format: direct array of orders
+          ordersArray = data
+          totalCount = data.length // For now, assume this is the total. We'll need to get actual total count
+        } else if (data && typeof data === 'object' && 'orders' in data) {
+          // Legacy format: object with orders and totalCount
+          ordersArray = data.orders || []
+          totalCount = data.totalCount || 0
+        } else {
+          console.error('Unexpected response format:', data)
+          ordersArray = []
+          totalCount = 0
+        }
+        
+        console.log('Number of orders loaded:', ordersArray.length)
+        console.log('Sample order:', ordersArray[0] || 'No orders')
+        setOrders(ordersArray)
+        setTotalOrderCount(totalCount)
+        setCurrentPage(page)
+        console.log('Orders state updated with', ordersArray.length, 'orders')
       } else {
-        console.error('Failed to load orders from database')
+        const errorText = await response.text()
+        console.error('Failed to load orders from database:', errorText)
       }
     } catch (error) {
       console.error('Error loading orders:', error)
+    } finally {
+      setLoadingOrders(false)
     }
   }
 
@@ -336,27 +460,113 @@ export function Dashboard() {
   }
 
   // Bulk delete selected orders
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedOrders.size === 0) {
       setFetchResult('No orders selected for deletion')
       return
     }
 
     if (confirm(`Are you sure you want to delete ${selectedOrders.size} selected order(s)?`)) {
-      // Delete selected orders from storage
-      selectedOrders.forEach(orderId => {
-        storage.deleteOrder(orderId)
+      try {
+        // Delete selected orders from database
+        const deletePromises = Array.from(selectedOrders).map(orderId =>
+          fetch(`/api/orders/${orderId}`, { 
+            method: 'DELETE', 
+            credentials: 'include' 
+          })
+        )
+        
+        await Promise.all(deletePromises)
+        
+        // Refresh orders from database
+        await loadOrdersFromDatabase()
+        
+        // Clear selection
+        setSelectedOrders(new Set())
+        
+        // Show success message
+        setFetchResult(`Successfully deleted ${selectedOrders.size} order(s)`)
+      } catch (error: any) {
+        console.error('Error deleting orders:', error)
+        setFetchResult('Error deleting orders: ' + error.message)
+      }
+    }
+  }
+
+  // Clear all orders
+  const handleClearAllOrders = async () => {
+    if (confirm('Are you sure you want to delete all orders from the database and start fresh?')) {
+      try {
+        console.log('Starting clear all orders operation...')
+        
+        // Delete all orders from database using bulk endpoint
+        const response = await fetch('/api/orders/clear-all', { 
+          method: 'DELETE', 
+          credentials: 'include' 
+        })
+        
+        console.log('Clear all response status:', response.status)
+        
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('Clear all error response:', errorText)
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        
+        const responseData = await response.json()
+        console.log('Clear all response data:', responseData)
+        
+        console.log('Refreshing orders from database...')
+        // Refresh orders from database
+        await loadOrdersFromDatabase()
+        
+        // Clear selection
+        setSelectedOrders(new Set())
+        
+        // Show success message
+        setFetchResult('Successfully cleared all orders from the database')
+        console.log('Clear all orders operation completed successfully')
+      } catch (error: any) {
+        console.error('Error clearing orders:', error)
+        setFetchResult('Error clearing orders: ' + error.message)
+      }
+    }
+  }
+
+  const handleReprocessOrders = async () => {
+    try {
+      setFetchingOrders(true)
+      console.log('Reprocessing orders...')
+      
+      const response = await fetch('/api/reprocess-orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
       
-      // Refresh orders list
-      const updatedOrders = storage.getOrders()
-      setOrders(updatedOrders)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to reprocess orders')
+      }
       
-      // Clear selection
-      setSelectedOrders(new Set())
+      const result = await response.json()
+      console.log('Reprocess orders result:', result)
       
-      // Show success message
-      setFetchResult(`Successfully deleted ${selectedOrders.size} order(s)`)
+      if (result.success) {
+        // Show success message
+        setFetchResult(`✅ Successfully reprocessed ${result.results[0]?.reprocessed || 0} orders.`)
+        
+        // Refresh the orders list
+        await loadOrdersFromDatabase()
+      } else {
+        throw new Error(result.error || 'Failed to reprocess orders')
+      }
+    } catch (error) {
+      console.error('Error reprocessing orders:', error)
+      setFetchResult(`❌ Error: ${error instanceof Error ? error.message : 'Failed to reprocess orders'}`)
+    } finally {
+      setFetchingOrders(false)
     }
   }
 
@@ -373,9 +583,28 @@ export function Dashboard() {
           >
             Delete Selected ({selectedOrders.size})
           </Button>
-          <Button onClick={handleFetchOrders} disabled={fetchingOrders} className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white">
+          <Button 
+            onClick={handleClearAllOrders} 
+            variant="destructive"
+            className="flex items-center gap-2"
+          >
+            Clear All Orders
+          </Button>
+          <Button 
+            onClick={handleFetchOrders} 
+            disabled={fetchingOrders} 
+            className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white"
+          >
             <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
             {fetchingOrders ? "Fetching..." : "Fetch Orders from Shopify"}
+          </Button>
+          <Button 
+            onClick={handleReprocessOrders} 
+            disabled={fetchingOrders} 
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
+            {fetchingOrders ? "Reprocessing..." : "Reprocess Orders"}
           </Button>
         </div>
       </div>
@@ -385,7 +614,7 @@ export function Dashboard() {
         </div>
       )}
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-olive-600">{totalOrders}</div>
@@ -394,23 +623,58 @@ export function Dashboard() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-warning">{readyForExport}</div>
-            <p className="text-xs text-muted-foreground">Ready for Export</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-success">{exported}</div>
-            <p className="text-xs text-muted-foreground">Exported</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
             <div className="text-2xl font-bold text-error">{errors}</div>
             <p className="text-xs text-muted-foreground">Errors</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-2">Store Breakdown</p>
+            {storeBreakdownArray.length > 0 ? (
+              <div className="space-y-1">
+                {storeBreakdownArray.map(([prefix, count]) => (
+                  <div key={prefix} className="flex justify-between text-xs">
+                    <span className="text-blue-700 font-medium">{prefix}:</span>
+                    <span className="text-muted-foreground">{count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground text-sm py-2">
+                No orders found
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Express Orders Card */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-2xl font-bold text-purple-600">{expressOrdersArray.length}</div>
+              <p className="text-xs text-muted-foreground">Express Orders</p>
+            </div>
+          </div>
+          {expressOrdersArray.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {expressOrdersArray.map((order, index) => (
+                <div key={index} className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="font-medium text-purple-700 text-sm">{order.deliveryOrderNo}</div>
+                  <div className="text-muted-foreground text-xs truncate" title={order.fullLineItem}>
+                    {order.fullLineItem}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground text-sm py-4">
+              No Express orders found
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -555,6 +819,36 @@ export function Dashboard() {
                 )}
               </div>
             </div>
+            
+            {/* Pagination Controls */}
+            {totalOrderCount > 0 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalOrderCount)} of {totalOrderCount} orders
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadOrdersFromDatabase(currentPage - 1)}
+                    disabled={currentPage === 1 || loadingOrders}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage} of {Math.ceil(totalOrderCount / pageSize)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadOrdersFromDatabase(currentPage + 1)}
+                    disabled={currentPage >= Math.ceil(totalOrderCount / pageSize) || loadingOrders}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

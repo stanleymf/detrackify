@@ -295,4 +295,144 @@ For issues and questions:
 1. Check the troubleshooting section
 2. Review Cloudflare documentation
 3. Check worker logs with `npx wrangler tail`
-4. Verify database state with D1 queries 
+4. Verify database state with D1 queries
+
+## Shopify Webhook Setup
+
+### Automatic Webhook Registration
+Use the provided script to automatically register the fulfillment webhook:
+
+```bash
+node register-fulfillment-webhook.js <your-shop-domain> <your-access-token>
+```
+
+Example:
+```bash
+node register-fulfillment-webhook.js windflower-florist.myshopify.com shpat_1234567890abcdef
+```
+
+### Manual Webhook Registration
+If you prefer to register the webhook manually:
+
+1. **Go to your Shopify Partner Dashboard**
+2. **Navigate to your app**
+3. **Go to App Setup > Webhooks**
+4. **Click "Add webhook"**
+5. **Configure the webhook:**
+   - **Event**: `orders/fulfilled`
+   - **Format**: `JSON`
+   - **URL**: `https://detrackify.stanleytan92.workers.dev/api/webhooks/shopify`
+6. **Click "Save webhook"**
+
+### Webhook Configuration Details
+
+#### **Webhook Endpoint**
+- **URL**: `https://detrackify.stanleytan92.workers.dev/api/webhooks/shopify`
+- **Method**: `POST`
+- **Format**: `JSON`
+
+#### **Webhook Topic**
+- **Topic**: `orders/fulfilled`
+- **Trigger**: When an order is fulfilled in Shopify
+- **Data**: Complete order information in JSON format
+
+#### **Security**
+- **HMAC Verification**: Webhook signatures are verified using your store's webhook secret
+- **Store Validation**: Only orders from configured stores are processed
+- **Duplicate Prevention**: Orders are only processed once
+
+### How It Works
+
+1. **User clicks "Fulfill" in Shopify** → Order is marked as fulfilled
+2. **Shopify sends webhook** → `POST` to your app's webhook endpoint
+3. **App processes the order** → Extracts data using field mappings
+4. **Order appears in dashboard** → Ready for Detrack export
+5. **User exports to Detrack** → Processed order data for delivery
+
+### Testing the Webhook
+
+1. **Register the webhook** using the script or manual method
+2. **Fulfill an order** in your Shopify store
+3. **Check the dashboard** - the order should appear automatically
+4. **Monitor server logs** for webhook processing details
+
+### Troubleshooting
+
+#### **Webhook Not Receiving Data**
+- Verify the webhook URL is correct
+- Check that the webhook is registered for the correct topic
+- Ensure your store domain is configured in the app
+
+#### **Orders Not Appearing in Dashboard**
+- Check server logs for webhook processing errors
+- Verify field mappings are configured correctly
+- Ensure the store is properly configured in the app
+
+#### **Webhook Signature Errors**
+- Verify the webhook secret is correctly configured
+- Check that the HMAC signature verification is working
+- Ensure the webhook payload is not being modified
+
+### Webhook Events Logging
+
+The app logs all webhook events for debugging:
+- Webhook receipt and validation
+- Order processing steps
+- Success/failure status
+- Error details if processing fails
+
+### Rate Limiting
+
+Shopify webhooks have rate limits:
+- **REST Admin API**: 40 requests per app per store per minute
+- **Webhook delivery**: Automatic retry with exponential backoff
+- **App handles**: Graceful processing of webhook failures
+
+## Store Configuration
+
+### Adding a Store
+1. Go to Settings in the app
+2. Click "Add Store"
+3. Enter store details:
+   - Store name
+   - Shopify domain (e.g., `your-shop.myshopify.com`)
+   - Access token
+   - Webhook secret
+4. Save the store
+
+### Field Mappings
+Configure how Shopify order fields map to Detrack fields:
+- Global Field Mappings: Direct field-to-field mapping
+- Extract Processing: Special logic for dates, times, descriptions
+
+## Usage
+
+### Processing Orders
+1. **Automatic**: Orders are processed when fulfilled in Shopify
+2. **Manual**: Use "Fetch Orders" to get existing orders
+3. **Reprocess**: Use "Reprocess Orders" to update with new mappings
+
+### Export to Detrack
+1. Review processed orders in the dashboard
+2. Select orders for export
+3. Export to Detrack format
+4. Import into Detrack delivery management system
+
+## Troubleshooting
+
+### Common Issues
+- **Webhook not receiving**: Check URL and Shopify webhook settings
+- **Orders not appearing**: Verify store configuration and field mappings
+- **Processing errors**: Check logs for detailed error messages
+
+### Logs
+Monitor Cloudflare Workers logs for debugging:
+```bash
+wrangler tail
+```
+
+## Security Considerations
+- All webhooks are verified using HMAC signatures
+- Access tokens are encrypted in the database
+- Session management uses secure cookies
+- API endpoints are protected with authentication 

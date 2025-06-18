@@ -54,8 +54,8 @@ export interface GlobalFieldMapping {
 // Extract Processing Mapping - special fields that require logic processing
 export interface ExtractProcessingMapping {
   dashboardField: string
-  processingType: 'date' | 'time' | 'description' | 'itemCount'
-  sourceField: string // e.g., 'order.tags', 'line_items'
+  processingType: 'date' | 'time' | 'group' | 'itemCount' | 'description'
+  sourceField: string // e.g., 'order.tags', 'line_items', 'order.name'
   format?: string // for date/time formatting
 }
 
@@ -81,9 +81,10 @@ export const EXTRACT_PROCESSING_FIELDS = [
   'processingDate', 
   'jobReleaseTime',
   'deliveryCompletionTimeWindow',
-  'description',
+  'group',
   'noOfShippingLabels',
-  'itemCount'
+  'itemCount',
+  'description'
 ] as const
 
 export type ExtractProcessingField = typeof EXTRACT_PROCESSING_FIELDS[number]

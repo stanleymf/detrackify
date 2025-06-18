@@ -34,6 +34,7 @@ export interface Store {
   access_token: string
   api_version: string
   webhook_secret: string
+  api_secret?: string
   store_name: string
   created_at: string
   updated_at: string
@@ -81,9 +82,9 @@ export class DatabaseService {
     const now = new Date().toISOString()
     
     await this.db.prepare(`
-      INSERT INTO stores (id, shopify_domain, access_token, api_version, webhook_secret, store_name, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, store.shopify_domain, store.access_token, store.api_version, store.webhook_secret, store.store_name, now, now).run()
+      INSERT INTO stores (id, shopify_domain, access_token, api_version, webhook_secret, api_secret, store_name, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, store.shopify_domain, store.access_token, store.api_version, store.webhook_secret, store.api_secret, store.store_name, now, now).run()
 
     return {
       id,
@@ -102,14 +103,88 @@ export class DatabaseService {
   }
 
   async updateStore(id: string, updates: Partial<Store>): Promise<void> {
-    const setClause = Object.keys(updates).map(key => `${key} = ?`).join(', ')
-    const values = Object.values(updates)
-    
-    await this.db.prepare(`
-      UPDATE stores 
-      SET ${setClause}, updated_at = ? 
-      WHERE id = ?
-    `).bind(...values, new Date().toISOString(), id).run()
+    // Check if api_secret column exists by trying to update it separately
+    if (updates.api_secret !== undefined) {
+      try {
+        // Try to update api_secret column
+        await this.db.prepare(`
+          UPDATE stores 
+          SET api_secret = ?, updated_at = ? 
+          WHERE id = ?
+        `).bind(updates.api_secret, new Date().toISOString(), id).run()
+        
+        // Remove api_secret from updates to avoid double update
+        const { api_secret, ...otherUpdates } = updates
+        
+        // Update other fields if any
+        if (Object.keys(otherUpdates).length > 0) {
+          const setClause = Object.keys(otherUpdates).map(key => `${key} = ?`).join(', ')
+          const values = Object.values(otherUpdates)
+          
+          await this.db.prepare(`
+            UPDATE stores 
+            SET ${setClause}, updated_at = ? 
+            WHERE id = ?
+          `).bind(...values, new Date().toISOString(), id).run()
+        }
+      } catch (error) {
+        console.log('DatabaseService.updateStore: api_secret column not available, attempting to create it...')
+        
+        try {
+          // Try to create the api_secret column
+          await this.db.exec('ALTER TABLE stores ADD COLUMN api_secret TEXT')
+          console.log('DatabaseService.updateStore: Successfully created api_secret column')
+          
+          // Now try the update again
+          await this.db.prepare(`
+            UPDATE stores 
+            SET api_secret = ?, updated_at = ? 
+            WHERE id = ?
+          `).bind(updates.api_secret, new Date().toISOString(), id).run()
+          
+          // Remove api_secret from updates to avoid double update
+          const { api_secret, ...otherUpdates } = updates
+          
+          // Update other fields if any
+          if (Object.keys(otherUpdates).length > 0) {
+            const setClause = Object.keys(otherUpdates).map(key => `${key} = ?`).join(', ')
+            const values = Object.values(otherUpdates)
+            
+            await this.db.prepare(`
+              UPDATE stores 
+              SET ${setClause}, updated_at = ? 
+              WHERE id = ?
+            `).bind(...values, new Date().toISOString(), id).run()
+          }
+        } catch (createError) {
+          console.log('DatabaseService.updateStore: Failed to create api_secret column, skipping api_secret update')
+          
+          // If we can't create the column, update other fields only
+          const { api_secret, ...otherUpdates } = updates
+          
+          if (Object.keys(otherUpdates).length > 0) {
+            const setClause = Object.keys(otherUpdates).map(key => `${key} = ?`).join(', ')
+            const values = Object.values(otherUpdates)
+            
+            await this.db.prepare(`
+              UPDATE stores 
+              SET ${setClause}, updated_at = ? 
+              WHERE id = ?
+            `).bind(...values, new Date().toISOString(), id).run()
+          }
+        }
+      }
+    } else {
+      // No api_secret update, proceed normally
+      const setClause = Object.keys(updates).map(key => `${key} = ?`).join(', ')
+      const values = Object.values(updates)
+      
+      await this.db.prepare(`
+        UPDATE stores 
+        SET ${setClause}, updated_at = ? 
+        WHERE id = ?
+      `).bind(...values, new Date().toISOString(), id).run()
+    }
   }
 
   async deleteStore(id: string): Promise<void> {
@@ -147,15 +222,49 @@ export class DatabaseService {
     return this.db.prepare('SELECT * FROM orders WHERE store_id = ? AND shopify_order_id = ?').bind(storeId, shopifyOrderId).first<Order>()
   }
 
-  async updateOrder(id: string, updates: Partial<Order>): Promise<void> {
-    const setClause = Object.keys(updates).map(key => `${key} = ?`).join(', ')
-    const values = Object.values(updates)
+  async deleteOrder(id: string): Promise<void> {
+    await this.db.prepare('DELETE FROM orders WHERE id = ?').bind(id).run()
+  }
+
+  async updateOrder(id: string, updates: {
+    shopify_order_name?: string
+    status?: string
+    processed_data?: string
+    raw_shopify_data?: string
+    exported_at?: string | null
+    updated_at?: string
+  }): Promise<void> {
+    const fields = Object.keys(updates).filter(key => updates[key as keyof typeof updates] !== undefined)
+    if (fields.length === 0) return
+
+    const setClause = fields.map(field => `${field} = ?`).join(', ')
+    const values = fields.map(field => updates[field as keyof typeof updates])
     
-    await this.db.prepare(`
-      UPDATE orders 
-      SET ${setClause}, updated_at = ? 
-      WHERE id = ?
-    `).bind(...values, new Date().toISOString(), id).run()
+    await this.db.prepare(`UPDATE orders SET ${setClause} WHERE id = ?`).bind(...values, id).run()
+  }
+
+  async deleteAllOrders(): Promise<void> {
+    console.log('DatabaseService.deleteAllOrders: Starting DELETE FROM orders query...')
+    
+    // First, let's check how many orders exist
+    const countResult = await this.db.prepare('SELECT COUNT(*) as count FROM orders').first<{count: number}>()
+    const orderCount = countResult?.count || 0
+    console.log(`DatabaseService.deleteAllOrders: Found ${orderCount} orders to delete`)
+    
+    // Delete all orders
+    const result = await this.db.prepare('DELETE FROM orders').run()
+    console.log('DatabaseService.deleteAllOrders: Query completed, result:', result)
+    console.log(`DatabaseService.deleteAllOrders: Deleted ${result.changes} orders`)
+    
+    // Also clear webhook events to prevent reprocessing
+    const webhookResult = await this.db.prepare('DELETE FROM webhook_events').run()
+    console.log('DatabaseService.deleteAllOrders: Cleared webhook events, result:', webhookResult)
+    console.log(`DatabaseService.deleteAllOrders: Deleted ${webhookResult.changes} webhook events`)
+    
+    // Verify deletion
+    const verifyResult = await this.db.prepare('SELECT COUNT(*) as count FROM orders').first<{count: number}>()
+    const remainingOrders = verifyResult?.count || 0
+    console.log(`DatabaseService.deleteAllOrders: Verification - ${remainingOrders} orders remaining`)
   }
 
   async getOrdersByStore(storeId: string, limit = 50, offset = 0): Promise<Order[]> {
@@ -165,6 +274,16 @@ export class DatabaseService {
       ORDER BY created_at DESC 
       LIMIT ? OFFSET ?
     `).bind(storeId, limit, offset).all<Order>()
+    
+    return result.results || []
+  }
+
+  async getAllOrders(limit = 50, offset = 0): Promise<Order[]> {
+    const result = await this.db.prepare(`
+      SELECT * FROM orders 
+      ORDER BY created_at DESC 
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all<Order>()
     
     return result.results || []
   }
@@ -416,7 +535,38 @@ export class DatabaseService {
   }
 
   async cleanupExpiredSessions(): Promise<void> {
-    await this.db.prepare('DELETE FROM user_sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run()
+    await this.db.prepare('DELETE FROM user_sessions WHERE expires_at < ?').bind(new Date().toISOString()).run()
+  }
+
+  // Detrack Configuration
+  async getDetrackConfig(): Promise<any> {
+    const result = await this.db.prepare('SELECT * FROM detrack_config ORDER BY created_at DESC LIMIT 1').first()
+    return result
+  }
+
+  async saveDetrackConfig(config: {
+    apiKey: string
+    baseUrl?: string
+    isEnabled: boolean
+  }): Promise<void> {
+    const id = generateUUID()
+    const now = new Date().toISOString()
+    
+    // Delete existing config
+    await this.db.prepare('DELETE FROM detrack_config').run()
+    
+    // Insert new config
+    await this.db.prepare(`
+      INSERT INTO detrack_config (id, api_key, base_url, is_enabled, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(
+      id, 
+      config.apiKey, 
+      config.baseUrl || 'https://api.detrack.com/v2',
+      config.isEnabled ? 1 : 0,
+      now, 
+      now
+    ).run()
   }
 
   // Webhook Event Tracking
