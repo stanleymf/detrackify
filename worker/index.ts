@@ -1669,6 +1669,7 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		address: getField('address', ''),
 		phone: cleanPhoneNumber(getField('recipientPhoneNo', '')),
 		recipient_name: `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
+		admin_graphql_api_id: "TEST-ORDER-123",
 		
 		// Required shipping address structure
 		shipping_address: {
