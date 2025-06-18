@@ -1665,13 +1665,6 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		delivery_type: 'delivery',
 		status: 'pending',
 		
-		// Address and contact
-		address: getField('address', ''),
-		postal: getField('postalCode', ''),
-		phone: cleanPhoneNumber(getField('recipientPhoneNo', '')),
-		recipient_name: `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
-		company: getField('companyName', ''),
-		
 		// Required shipping address structure
 		shipping_address: {
 			address1: getField('address', ''),
@@ -1680,42 +1673,6 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 			recipient_name: `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
 			company: getField('companyName', '')
 		},
-		
-		// Additional information
-		instructions: getField('instructions', ''),
-		email: getField('emailsForNotifications', ''),
-		sku: getField('sku', ''),
-		qty: getField('qty', '1'),
-		description: getField('description', ''),
-		
-		// Group and categorization
-		group: getField('group', ''),
-		zone: getField('zone', ''),
-		
-		// Account and assignment
-		account_no: getField('accountNo', ''),
-		assign_to: getField('assignTo', ''),
-		delivery_job_owner: getField('deliveryJobOwner', ''),
-		
-		// Sender information
-		sender_name: getField('senderNameOnApp', ''),
-		sender_phone: cleanPhoneNumber(getField('senderPhoneNo', '')),
-		sender_number: cleanPhoneNumber(getField('senderNumberOnApp', '')),
-		
-		// Additional fields
-		service_time: getField('serviceTime', ''),
-		remarks: getField('remarks', ''),
-		attachment_url: getField('attachmentUrl', ''),
-		pod_at: getField('podAt', ''),
-		tracking_no: getField('trackingNo', ''),
-		delivery_sequence: getField('deliverySequence', ''),
-		no_of_shipping_labels: getField('noOfShippingLabels', ''),
-		item_count: getField('itemCount', ''),
-		delivery_completion_time_window: getField('deliveryCompletionTimeWindow', ''),
-		processing_date: getField('processingDate', ''),
-		
-		// Shopify-specific field required by Detrack
-		admin_graphql_api_id: getField('shopifyOrderId', orderName.replace('#', '')),
 		
 		// Additional required fields from validation error
 		order_number: getField('deliveryOrderNo', orderName).replace('#', ''),
@@ -1826,13 +1783,12 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 		const testPayload = {
 			do: "TEST-CONNECTION",
 			date: new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY format
-			address: "Test Address",
-			phone: "12345678",
-			recipient_name: "Test Recipient",
+			time: "09:00",
 			delivery_type: "delivery",
-			admin_graphql_api_id: "TEST-ORDER-123",
+			status: "pending",
 			order_number: "TEST-CONNECTION",
 			updated_at: new Date().toISOString(), // Use proper ISO timestamp format
+			
 			shipping_address: {
 				address1: "Test Address",
 				postal_code: "123456",
