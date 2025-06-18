@@ -49,7 +49,7 @@ export function Dashboard() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize] = useState(50) // 50 orders per page
+  const [pageSize] = useState(200) // 200 orders per page
   const [totalOrderCount, setTotalOrderCount] = useState(0)
   const [loadingOrders, setLoadingOrders] = useState(false)
 
