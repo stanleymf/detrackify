@@ -677,15 +677,15 @@ async function handleGetOrders(request: Request, db: DatabaseService): Promise<R
 		const url = new URL(request.url)
 		const storeId = url.searchParams.get('storeId')
 		const status = url.searchParams.get('status')
-		const limit = parseInt(url.searchParams.get('limit') || '50')
+		const limit = parseInt(url.searchParams.get('limit') || '200')
 		const offset = parseInt(url.searchParams.get('offset') || '0')
 
 		console.log('handleGetOrders called with:', { storeId, status, limit, offset })
 
 		let orders
 		if (storeId) {
-			orders = await db.getOrdersByStore(storeId, limit, offset)
-			console.log(`Found ${orders.length} orders for store ${storeId}`)
+				orders = await db.getOrdersByStore(storeId, limit, offset)
+				console.log(`Found ${orders.length} orders for store ${storeId}`)
 		} else if (status) {
 			orders = await db.getOrdersByStatus(status, limit, offset)
 			console.log(`Found ${orders.length} orders with status ${status}`)

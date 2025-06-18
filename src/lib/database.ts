@@ -267,36 +267,60 @@ export class DatabaseService {
     console.log(`DatabaseService.deleteAllOrders: Verification - ${remainingOrders} orders remaining`)
   }
 
-  async getOrdersByStore(storeId: string, limit = 50, offset = 0): Promise<Order[]> {
-    const result = await this.db.prepare(`
-      SELECT * FROM orders 
-      WHERE store_id = ? 
-      ORDER BY created_at DESC 
-      LIMIT ? OFFSET ?
-    `).bind(storeId, limit, offset).all<Order>()
-    
-    return result.results || []
+  async getOrdersByStore(storeId: string, limit = 200, offset = 0): Promise<Order[]> {
+    try {
+      console.log(`Database: Getting orders for store ${storeId} with limit ${limit} and offset ${offset}`)
+      
+      const result = await this.db.prepare(`
+        SELECT * FROM orders 
+        WHERE store_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT ? OFFSET ?
+      `).bind(storeId, limit, offset).all<Order>()
+      
+      console.log(`Database: Found ${result.results?.length || 0} orders for store ${storeId}`)
+      return result.results || []
+    } catch (error) {
+      console.error('Database: Error getting orders by store:', error)
+      throw error
+    }
   }
 
-  async getAllOrders(limit = 50, offset = 0): Promise<Order[]> {
-    const result = await this.db.prepare(`
-      SELECT * FROM orders 
-      ORDER BY created_at DESC 
-      LIMIT ? OFFSET ?
-    `).bind(limit, offset).all<Order>()
-    
-    return result.results || []
+  async getAllOrders(limit = 200, offset = 0): Promise<Order[]> {
+    try {
+      console.log(`Database: Getting all orders with limit ${limit} and offset ${offset}`)
+      
+      const result = await this.db.prepare(`
+        SELECT * FROM orders 
+        ORDER BY created_at DESC 
+        LIMIT ? OFFSET ?
+      `).bind(limit, offset).all<Order>()
+      
+      console.log(`Database: Found ${result.results?.length || 0} total orders`)
+      return result.results || []
+    } catch (error) {
+      console.error('Database: Error getting all orders:', error)
+      throw error
+    }
   }
 
-  async getOrdersByStatus(status: string, limit = 50, offset = 0): Promise<Order[]> {
-    const result = await this.db.prepare(`
-      SELECT * FROM orders 
-      WHERE status = ? 
-      ORDER BY created_at DESC 
-      LIMIT ? OFFSET ?
-    `).bind(status, limit, offset).all<Order>()
-    
-    return result.results || []
+  async getOrdersByStatus(status: string, limit = 200, offset = 0): Promise<Order[]> {
+    try {
+      console.log(`Database: Getting orders with status ${status} with limit ${limit} and offset ${offset}`)
+      
+      const result = await this.db.prepare(`
+        SELECT * FROM orders 
+        WHERE status = ? 
+        ORDER BY created_at DESC 
+        LIMIT ? OFFSET ?
+      `).bind(status, limit, offset).all<Order>()
+      
+      console.log(`Database: Found ${result.results?.length || 0} orders with status ${status}`)
+      return result.results || []
+    } catch (error) {
+      console.error('Database: Error getting orders by status:', error)
+      throw error
+    }
   }
 
   // Field Mapping Management
