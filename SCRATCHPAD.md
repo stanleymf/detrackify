@@ -5,6 +5,37 @@
 - **Architecture**: Multi-store support with configurable field mapping
 - **Tech Stack**: React + TypeScript + Vite + shadcn/ui + Cloudflare Workers + D1 + KV
 
+## Direct Dashboard Field Export Fix ✅ (v0.6.0)
+
+### Problem Identified
+- **Issue**: Export to Detrack was using complex transformation logic instead of dashboard display fields
+- **Symptom**: Export data didn't match what users saw in dashboard, causing confusion and potential errors
+- **Root Cause**: Export process was transforming data through multiple layers instead of using direct dashboard fields
+
+### Implementation Details
+- **Direct Field Usage**: Export now uses exact dashboard fields instead of complex transformation
+- **Simplified Logic**: Removed transformation layer in favor of direct field mapping
+- **Enhanced Logging**: Added detailed logging to show exact data being sent to Detrack API
+- **Data Validation**: Logs show complete order data structure before API submission
+
+### User Experience
+- **Consistent Data**: Export sends the same data structure shown in dashboard display
+- **Simplified Process**: No complex transformation - what you see is what gets exported
+- **Better Reliability**: Direct field mapping reduces potential for transformation errors
+- **Clear Feedback**: Detailed logging shows exactly what data is being exported
+
+### Technical Implementation
+- **Export Data Source**: Changed from transformed data to dashboard display fields
+- **Field Mapping**: Simplified to use dashboard fields that match CSV format previously used for manual import
+- **API Request Structure**: Export requests now contain the exact field structure shown in dashboard
+- **Logging Enhancement**: Added comprehensive logging to track export data flow
+
+### Benefits
+- **Data Consistency**: Export matches dashboard display exactly
+- **Reduced Complexity**: Simpler export logic is easier to maintain and debug
+- **User Confidence**: Users can verify export data matches what they see in dashboard
+- **Error Reduction**: Direct field mapping eliminates transformation-related errors
+
 ## Current Project Analysis
 
 ### Existing Structure

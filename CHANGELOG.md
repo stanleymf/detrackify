@@ -14,6 +14,50 @@ All notable changes to this project will be documented in this file.
 - Advanced field mapping UI
 - Order status tracking and management
 
+## [0.6.0] - 2024-01-XX
+
+### Added
+- **Direct Dashboard Field Export** - Export to Detrack now uses exact dashboard fields instead of complex transformation logic
+- **Simplified Export Logic** - Removed complex field mapping transformation in favor of direct field usage
+- **Enhanced Export Logging** - Detailed logging shows exact data being sent to Detrack API
+- **Export Data Validation** - Logs show complete order data structure before API submission
+
+### Changed
+- **Export Data Source** - Export now uses dashboard display fields directly instead of transformed data
+- **Export Field Mapping** - Simplified to use dashboard fields that match CSV format previously used for manual import
+- **Export Process** - Removed complex transformation layer, now directly maps dashboard fields to Detrack format
+- **API Request Structure** - Export requests now contain the exact field structure shown in dashboard
+
+### Fixed
+- **Export Field Mismatch** - Fixed issue where export used transformed data instead of dashboard fields
+- **Export Data Accuracy** - Export now sends the same data structure shown in dashboard display
+- **Export Complexity** - Simplified export logic to match user expectations from dashboard view
+- **Export Reliability** - Direct field mapping reduces potential for data transformation errors
+
+## [0.5.0] - 2024-01-XX
+
+### Added
+- **Enhanced Dashboard Statistics** - Fixed order counting to show unique orders instead of line items
+- **Store Breakdown Stat Card** - New stat card showing orders by store prefix (e.g., WF, FL, SG) with top store count and additional store breakdown
+- **Express Orders Stat Card** - Specialized stat card that identifies and displays Express delivery orders with full line item details
+- **Improved Stats Layout** - Expanded dashboard grid from 4 to 6 columns to accommodate new stat cards
+- **Smart Order Deduplication** - Stats now correctly count unique orders rather than individual line items
+- **Express Order Detection** - Automatic detection of Express orders by searching line item descriptions for "express" keyword
+- **Store Prefix Extraction** - Intelligent extraction of store prefixes from order numbers (e.g., "WF" from "#WF10000")
+
+### Changed
+- **Stats Calculation Logic** - Modified all stat calculations to count unique orders instead of total line items
+- **Dashboard Grid Layout** - Updated from 4-column to 6-column grid for better stat card organization
+- **Express Orders Display** - Shows delivery order number and complete line item title + variant title for Express orders
+- **Store Breakdown Display** - Shows top store count with additional stores listed below in compact format
+- **Color Coding** - Added purple color scheme for Express orders card and blue for store breakdown card
+
+### Fixed
+- **Incorrect Order Counts** - Fixed issue where stats showed line item counts instead of unique order counts
+- **Duplicate Order Counting** - Orders with multiple line items now count as 1 order instead of multiple
+- **Status Count Accuracy** - Status-based stats (Ready for Export, Exported, Errors) now correctly count unique orders
+- **Express Order Visibility** - Express orders are now prominently displayed for easy identification and management
+
 ## [0.4.0] - 2024-01-XX
 
 ### Added
