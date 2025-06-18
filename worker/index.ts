@@ -156,6 +156,10 @@ async function handleApiRoutes(
 		return handleTestDetrackConnection(db)
 	}
 
+	if (path === '/api/detrack/update-key' && request.method === 'POST') {
+		return handleUpdateDetrackApiKey(db)
+	}
+
 	// Protected routes (authentication required)
 	const authResult = await requireAuth(request, authService)
 	if (!authResult.authenticated) {
@@ -1837,6 +1841,47 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 	} catch (error: any) {
 		console.error('Error testing Detrack connection:', error)
 		return new Response(JSON.stringify({ error: error.message || 'Failed to test Detrack connection' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleUpdateDetrackApiKey(db: DatabaseService): Promise<Response> {
+	try {
+		console.log('Updating Detrack API key to correct value...')
+		
+		// The correct API key from the webhook URL
+		const correctApiKey = '10e3e77f4c4b42bc945bf8cbcc055cec0c826540a67681f82788cc17008b67d9'
+		
+		// Get current Detrack configuration
+		const detrackConfig = await getDetrackConfig(db)
+		console.log('Current Detrack config:', {
+			hasConfig: !!detrackConfig,
+			isEnabled: detrackConfig?.isEnabled,
+			hasApiKey: !!detrackConfig?.apiKey,
+			baseUrl: detrackConfig?.baseUrl
+		})
+		
+		// Update API key to the correct one
+		await db.saveDetrackConfig({
+			apiKey: correctApiKey,
+			baseUrl: detrackConfig?.baseUrl || 'https://connect.detrack.com/api/v1',
+			isEnabled: detrackConfig?.isEnabled || true
+		})
+		
+		console.log('Detrack API key updated successfully to:', correctApiKey)
+		return new Response(JSON.stringify({ 
+			success: true, 
+			message: 'API key updated successfully',
+			newApiKey: correctApiKey
+		}), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	} catch (error) {
+		console.error('Error updating Detrack API key:', error)
+		return new Response(JSON.stringify({ error: 'Failed to update Detrack API key' }), {
 			status: 500,
 			headers: { 'Content-Type': 'application/json' }
 		})
