@@ -1473,12 +1473,12 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 				})
 				
 				// Convert to Detrack format using dashboard fields directly
-				const detrackPayload = convertToDetrackFormat(lineItemData, order.shopify_order_name)
-				console.log('Detrack payload:', detrackPayload)
+				const payload = convertToDetrackFormat(lineItemData, order.shopify_order_name)
+				console.log('Converted to Detrack format:', payload)
 				
 				// Validate required fields
 				const requiredFields = ['do', 'date', 'address', 'phone', 'recipient_name']
-				const missingFields = requiredFields.filter(field => !detrackPayload[field] || detrackPayload[field].trim() === '')
+				const missingFields = requiredFields.filter(field => !payload[field] || payload[field].trim() === '')
 				
 				if (missingFields.length > 0) {
 					console.error(`Missing required fields for Detrack: ${missingFields.join(', ')}`)
@@ -1486,7 +1486,7 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 				}
 				
 				console.log(`Sending to Detrack API: https://app.detrack.com/api/v2/dn/jobs`)
-				console.log(`Using delivery order number: ${detrackPayload.do}`)
+				console.log(`Using delivery order number: ${payload.do}`)
 				
 				const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
 					method: 'POST',
@@ -1494,7 +1494,7 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 						'Content-Type': 'application/json',
 						'X-API-KEY': detrackConfig.apiKey
 					},
-					body: JSON.stringify(detrackPayload)
+					body: JSON.stringify(payload)
 				})
 				
 				console.log(`Detrack API response status: ${response.status}`)
@@ -1577,7 +1577,7 @@ async function getDetrackConfig(db: DatabaseService): Promise<any> {
 		// Return default config if none exists
 		return {
 			apiKey: '',
-			baseUrl: 'https://app.detrack.com/api/v1/',
+			baseUrl: 'https://app.detrack.com/api/v2',
 			isEnabled: false
 		}
 	} catch (error) {
@@ -1585,7 +1585,7 @@ async function getDetrackConfig(db: DatabaseService): Promise<any> {
 		// Return default config on error
 		return {
 			apiKey: '',
-			baseUrl: 'https://app.detrack.com/api/v1/',
+			baseUrl: 'https://app.detrack.com/api/v2',
 			isEnabled: false
 		}
 	}
@@ -1634,25 +1634,30 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 	
 	// Create payload according to Detrack API v2 specification
 	const payload = {
-		"do": getField('deliveryOrderNo', orderName).replace('#', ''),
-		"date": getDeliveryDate(),
-		"time": "09:00", // Default time
-		"delivery_type": "delivery",
-		"status": "pending",
-		"address": getField('address', ''),
-		"phone": cleanPhoneNumber(getField('recipientPhoneNo', '')),
-		"recipient_name": `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
-		"order_number": getField('deliveryOrderNo', orderName).replace('#', ''),
-		"updated_at": new Date().toISOString()
+		"data": [
+			{
+				"type": "Delivery",
+				"do_number": getField('deliveryOrderNo', orderName).replace('#', ''),
+				"date": getDeliveryDate(),
+				"tracking_number": getField('trackingNo', 'T0'),
+				"order_number": getField('deliveryOrderNo', orderName).replace('#', ''),
+				"address": getField('address', ''),
+				"deliver_to_collect_from": `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
+				"phone_number": cleanPhoneNumber(getField('recipientPhoneNo', '')),
+				"notify_email": getField('emailsForNotifications', ''),
+				"items": [
+					{
+						"sku": getField('sku', ''),
+						"description": getField('description', ''),
+						"quantity": parseInt(getField('qty', '1'))
+					}
+				]
+			}
+		]
 	}
 	
-	// Remove empty fields to avoid API validation issues
-	const cleanPayload = Object.fromEntries(
-		Object.entries(payload).filter(([_, value]) => value !== '' && value !== null && value !== undefined)
-	)
-
-	console.log('Converted to Detrack format:', cleanPayload)
-	return cleanPayload
+	console.log('Converted to Detrack format:', payload)
+	return payload
 }
 
 async function handleGetDetrackConfig(db: DatabaseService): Promise<Response> {
@@ -1685,7 +1690,7 @@ async function handleSaveDetrackConfig(request: Request, db: DatabaseService): P
 		// Save config directly to database
 		await db.saveDetrackConfig({
 			apiKey: updatedConfig.apiKey || '',
-			baseUrl: updatedConfig.baseUrl || 'https://app.detrack.com/api/v1/',
+			baseUrl: updatedConfig.baseUrl || 'https://app.detrack.com/api/v2',
 			isEnabled: updatedConfig.isEnabled || false
 		})
 		
@@ -1742,16 +1747,26 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 		
 		// Test connection using the correct Detrack API v2 payload structure
 		const testPayload = {
-			"do": "TEST-CONNECTION",
-			"date": new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY format
-			"time": "09:00",
-			"delivery_type": "delivery",
-			"status": "pending",
-			"address": "Test Address",
-			"phone": "12345678",
-			"recipient_name": "Test Recipient",
-			"order_number": "TEST-CONNECTION",
-			"updated_at": new Date().toISOString()
+			"data": [
+				{
+					"type": "Delivery",
+					"do_number": "TEST-CONNECTION",
+					"date": "2018-06-14",
+					"tracking_number": "T0",
+					"order_number": "TEST-CONNECTION",
+					"address": "Test Address",
+					"deliver_to_collect_from": "Test Recipient",
+					"phone_number": "12345678",
+					"notify_email": "test@test.com",
+					"items": [
+						{
+							"sku": "TEST-SKU",
+							"description": "Test Item",
+							"quantity": 1
+						}
+					]
+				}
+			]
 		}
 		
 		console.log('Testing with payload:', testPayload)
@@ -1796,7 +1811,7 @@ async function handleUpdateDetrackApiKey(db: DatabaseService): Promise<Response>
 	try {
 		console.log('Updating Detrack API key to correct value...')
 		
-		// The correct API key from the Detrack API v2 documentation
+		// The correct API key from the Detrack team
 		const correctApiKey = '9943520c80ee2aaad2cc80c29bdfb298e85feed021ef0328'
 		
 		// Get current Detrack configuration
