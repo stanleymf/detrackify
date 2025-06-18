@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Mobile Mode** - Comprehensive mobile responsiveness with card-based order view, collapsible controls menu, and mobile-optimized layouts
+- **Mobile Card View** - Orders display as cards on mobile devices with key information and easy selection
+- **Mobile Controls Menu** - Collapsible menu for filters and actions on mobile devices
+- **Mobile Layout Optimizations** - Responsive stats cards, Express orders grid, and header layout for mobile screens
+
 ### Fixed
 - **Store Breakdown Calculation** - Fixed store breakdown stat card to count unique orders instead of line items per store prefix
 

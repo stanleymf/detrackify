@@ -19,9 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Eye, Calendar, Clock, RefreshCw } from "lucide-react"
+import { Eye, Calendar, Clock, RefreshCw, Menu, X } from "lucide-react"
 import { type Order, DASHBOARD_FIELD_LABELS, type DashboardColumnConfig } from "@/types"
 import { storage } from "@/lib/storage"
+import { useIsMobile } from "@/components/hooks/use-mobile"
 
 export function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -36,6 +37,10 @@ export function Dashboard() {
     startX: number
     startWidth: number
   } | null>(null)
+  
+  // Mobile state
+  const isMobile = useIsMobile()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   
   // Fetch orders loading state
   const [fetchingOrders, setFetchingOrders] = useState(false)
@@ -614,7 +619,7 @@ export function Dashboard() {
         </div>
       )}
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'}`}>
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-olive-600">{totalOrders}</div>
@@ -658,7 +663,7 @@ export function Dashboard() {
             </div>
           </div>
           {expressOrdersArray.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className={`grid gap-3 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
               {expressOrdersArray.map((order, index) => (
                 <div key={index} className="p-3 bg-purple-50 rounded-lg border border-purple-200">
                   <div className="font-medium text-purple-700 text-sm">{order.deliveryOrderNo}</div>
@@ -680,7 +685,21 @@ export function Dashboard() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-olive-600">Order Dashboard</CardTitle>
-            <div className="flex gap-2">
+            
+            {/* Mobile Menu Button */}
+            {isMobile && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden"
+              >
+                {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </Button>
+            )}
+            
+            {/* Desktop Controls */}
+            <div className={`gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
               {/* Date Filter */}
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -747,105 +766,219 @@ export function Dashboard() {
               </Button>
             </div>
           </div>
+          
+          {/* Mobile Controls Menu */}
+          {isMobile && mobileMenuOpen && (
+            <div className="mt-4 space-y-3 border-t pt-4">
+              {/* Date Filter */}
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Select value={selectedDate} onValueChange={setSelectedDate}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filter by date..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Dates</SelectItem>
+                    {uniqueDates.map((date) => (
+                      <SelectItem key={date} value={date}>
+                        {date}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Timeslot Filter */}
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <Select value={selectedTimeslot} onValueChange={setSelectedTimeslot}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filter by timeslot..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Timeslots</SelectItem>
+                    {uniqueTimeslots.map((timeslot) => (
+                      <SelectItem key={timeslot} value={timeslot}>
+                        {timeslot}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="flex-1">
+                      <Eye className="h-4 w-4 mr-2" />
+                      Columns
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    {columnConfigs.map((config) => (
+                      <DropdownMenuCheckboxItem
+                        key={config.field}
+                        checked={config.visible}
+                        onCheckedChange={(checked) =>
+                          handleColumnVisibilityChange(config.field, checked as boolean)
+                        }
+                      >
+                        {DASHBOARD_FIELD_LABELS[config.field]}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  onClick={handleExportToDetrack}
+                  disabled={selectedOrders.size === 0}
+                  className="bg-olive-600 hover:bg-olive-700 text-white flex-1"
+                >
+                  Export ({selectedOrders.size})
+                </Button>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <div
-                className="min-w-full"
-                style={{
-                  minWidth: `${visibleColumns.reduce((sum, config) => sum + config.width, 48)}px`,
-                }}
-              >
-                {/* Header Row */}
-                <div className="flex bg-dust-200 border-b sticky top-0 z-10">
-                  <div className="w-12 p-2 border-r bg-dust-200 flex-shrink-0">
-                    <Checkbox
-                      checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
-                      onCheckedChange={handleSelectAll}
-                    />
-                  </div>
-                  {visibleColumns.map((config) => (
-                    <div
-                      key={config.field}
-                      className="p-2 border-r font-medium text-xs text-olive-700 bg-dust-200 relative group flex-shrink-0"
-                      style={{ width: `${config.width}px` }}
-                    >
-                      <div className="truncate pr-2">{DASHBOARD_FIELD_LABELS[config.field]}</div>
-                      {/* Resize Handle */}
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-olive-400 group-hover:bg-olive-300"
-                        onMouseDown={(e) => handleResizeStart(e, config.field)}
-                      />
-                    </div>
-                  ))}
+            {/* Mobile Card View */}
+            {isMobile ? (
+              <div className="space-y-3 p-4">
+                {/* Select All for Mobile */}
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  <Checkbox
+                    checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
+                    onCheckedChange={handleSelectAll}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    Select All ({filteredOrders.length})
+                  </span>
                 </div>
-
-                {/* Data Rows */}
+                
+                {/* Order Cards */}
                 {filteredOrders.map((order, index) => (
-                  <div
-                    key={order.id}
-                    className={`flex border-b hover:bg-dust-50 ${
-                      index % 2 === 0 ? "bg-white" : "bg-dust-25"
-                    }`}
-                  >
-                    <div className="w-12 p-2 border-r flex-shrink-0">
+                  <Card key={order.id} className="border-2 hover:border-olive-300 transition-colors">
+                    <CardContent className="p-4">
+                      {/* Order Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={selectedOrders.has(order.id)}
+                            onCheckedChange={(checked) =>
+                              handleSelectOrder(order.id, checked as boolean)
+                            }
+                          />
+                          <div>
+                            <div className="font-medium text-sm">{order.deliveryOrderNo}</div>
+                            <div className="text-xs text-muted-foreground">ID: {order.id.split('-')[0]}</div>
+                          </div>
+                        </div>
+                        {getStatusBadge(order.status)}
+                      </div>
+                      
+                      {/* Key Order Info */}
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Customer:</span>
+                          <span>{`${order.firstName || ''} ${order.lastName || ''}`.trim() || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Date:</span>
+                          <span>{order.deliveryDate || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Time:</span>
+                          <span>{order.deliveryCompletionTimeWindow || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Phone:</span>
+                          <span>{order.recipientPhoneNo || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Address:</span>
+                          <span className="text-right max-w-[200px] truncate" title={order.address}>
+                            {order.address || 'N/A'}
+                          </span>
+                        </div>
+                        {order.description && (
+                          <div className="pt-2 border-t">
+                            <div className="text-muted-foreground text-xs mb-1">Description:</div>
+                            <div className="text-sm truncate" title={order.description}>
+                              {order.description}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                
+                {filteredOrders.length === 0 && (
+                  <div className="text-center text-muted-foreground py-8">
+                    No orders found
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Desktop Table View */
+              <div className="overflow-x-auto">
+                <div
+                  className="min-w-full"
+                  style={{
+                    minWidth: `${visibleColumns.reduce((sum, config) => sum + config.width, 48)}px`,
+                  }}
+                >
+                  {/* Header Row */}
+                  <div className="flex bg-dust-200 border-b sticky top-0 z-10">
+                    <div className="w-12 p-2 border-r bg-dust-200 flex-shrink-0">
                       <Checkbox
-                        checked={selectedOrders.has(order.id)}
-                        onCheckedChange={(checked) =>
-                          handleSelectOrder(order.id, checked as boolean)
-                        }
+                        checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
+                        onCheckedChange={handleSelectAll}
                       />
                     </div>
                     {visibleColumns.map((config) => (
                       <div
                         key={config.field}
-                        className="border-r flex-shrink-0"
+                        className="p-2 border-r font-medium text-xs text-olive-700 bg-dust-200 relative group flex-shrink-0"
                         style={{ width: `${config.width}px` }}
                       >
-                        {renderCell(order, config.field)}
+                        <div className="truncate pr-2">{DASHBOARD_FIELD_LABELS[config.field]}</div>
+                        {/* Resize Handle */}
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-olive-400 group-hover:bg-olive-300"
+                          onMouseDown={(e) => handleResizeStart(e, config.field)}
+                        />
                       </div>
                     ))}
                   </div>
-                ))}
 
-                {filteredOrders.length === 0 && (
-                  <div className="flex items-center justify-center h-32 text-muted-foreground">
-                    {orders.length === 0 
-                      ? "No orders found. Orders will appear here when pulled from Shopify."
-                      : "No orders match the selected filters."
-                    }
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Pagination Controls */}
-            {totalOrderCount > 0 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-                <div className="text-sm text-muted-foreground">
-                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalOrderCount)} of {totalOrderCount} orders
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => loadOrdersFromDatabase(currentPage - 1)}
-                    disabled={currentPage === 1 || loadingOrders}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {currentPage} of {Math.ceil(totalOrderCount / pageSize)}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => loadOrdersFromDatabase(currentPage + 1)}
-                    disabled={currentPage >= Math.ceil(totalOrderCount / pageSize) || loadingOrders}
-                  >
-                    Next
-                  </Button>
+                  {/* Data Rows */}
+                  {filteredOrders.map((order, index) => (
+                    <div
+                      key={order.id}
+                      className={`flex border-b hover:bg-dust-50 ${
+                        index % 2 === 0 ? "bg-white" : "bg-dust-25"
+                      }`}
+                    >
+                      <div className="w-12 p-2 border-r flex-shrink-0">
+                        <Checkbox
+                          checked={selectedOrders.has(order.id)}
+                          onCheckedChange={(checked) =>
+                            handleSelectOrder(order.id, checked as boolean)
+                          }
+                        />
+                      </div>
+                      {visibleColumns.map((config) => (
+                        <div
+                          key={config.field}
+                          className="border-r flex-shrink-0"
+                          style={{ width: `${config.width}px` }}
+                        >
+                          {renderCell(order, config.field)}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

@@ -1463,10 +1463,10 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 					throw new Error(`Missing required fields: ${missingFields.join(', ')}`)
 				}
 				
-				console.log(`Sending to Detrack API: ${detrackConfig.baseUrl}/detrack/jobs/create/${detrackConfig.apiKey}`)
+				console.log(`Sending to Detrack API: ${detrackConfig.baseUrl}/webhook/detrack/jobs/create/${detrackConfig.apiKey}`)
 				console.log(`Using delivery order number: ${detrackPayload.do}`)
 				
-				const response = await fetch(`${detrackConfig.baseUrl}/detrack/jobs/create/${detrackConfig.apiKey}`, {
+				const response = await fetch(`${detrackConfig.baseUrl}/webhook/detrack/jobs/create/${detrackConfig.apiKey}`, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json'
@@ -1796,12 +1796,24 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 			})
 		}
 		
-		// Test connection using the jobs endpoint
-		const response = await fetch(`${detrackConfig.baseUrl}/detrack/jobs/create/${detrackConfig.apiKey}`, {
-			method: 'GET',
+		// Test connection using the jobs endpoint with a test payload
+		const testPayload = {
+			do: "TEST-CONNECTION",
+			date: new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY format
+			address: "Test Address",
+			phone: "12345678",
+			recipient_name: "Test Recipient",
+			delivery_type: "delivery"
+		}
+		
+		console.log('Testing with payload:', testPayload)
+		
+		const response = await fetch(`${detrackConfig.baseUrl}/webhook/detrack/jobs/create/${detrackConfig.apiKey}`, {
+			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'
-			}
+			},
+			body: JSON.stringify(testPayload)
 		})
 		
 		console.log('Detrack API response status:', response.status)
