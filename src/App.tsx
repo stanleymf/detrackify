@@ -12,6 +12,7 @@ function App() {
 
   useEffect(() => {
     // Check authentication status on app load
+    console.log('App useEffect: checking auth status')
     checkAuthStatus()
     // Initialize mock data on first load
     initializeMockData()
@@ -22,14 +23,18 @@ function App() {
       const response = await fetch('/api/auth/check', {
         credentials: 'include'
       })
-      
+      console.log('Auth check response:', response.status)
       if (response.ok) {
         setIsAuthenticated(true)
+      } else {
+        setIsAuthenticated(false)
       }
     } catch (error) {
       console.error('Auth check failed:', error)
+      setIsAuthenticated(false)
     } finally {
       setIsLoading(false)
+      console.log('Auth check complete, isLoading set to false')
     }
   }
 
@@ -51,6 +56,7 @@ function App() {
   }
 
   if (isLoading) {
+    console.log('App is loading...')
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-lg">Loading...</div>
@@ -59,8 +65,11 @@ function App() {
   }
 
   if (!isAuthenticated) {
+    console.log('User not authenticated, showing Login form')
     return <Login onLogin={handleLogin} />
   }
+
+  console.log('User authenticated, showing app')
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout}>

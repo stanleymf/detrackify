@@ -14,6 +14,28 @@ All notable changes to this project will be documented in this file.
 - Advanced field mapping UI
 - Order status tracking and management
 
+## [0.4.0] - 2024-01-XX
+
+### Added
+- Comprehensive Shopify Order Fields Integration - Added all official Shopify Order API fields (2024-01) for complete field mapping coverage
+- Enhanced Settings UI - Grouped Shopify fields in dropdown by category (Order, Customer, Shipping Address, Billing Address, Line Items, Fulfillments, Advanced)
+- Official Shopify Field Support - Added support for all standard Shopify order fields including id, name, order_number, email, phone, created_at, financial_status, fulfillment_status, etc.
+- Advanced Field Categories - Added support for metafields, discount_applications, shipping_lines, and other advanced Shopify fields
+- Improved Field Mapping UX - Clear visual grouping and labeling of Shopify fields in the mapping dropdown for easier configuration
+
+### Changed
+- Updated SHOPIFY_FIELDS array to include all official Shopify Order API fields instead of limited subset
+- Enhanced Settings component dropdown to group fields by category with clear section headers
+- Improved field mapping organization - Fields are now logically grouped for better user experience
+- Updated field mapping system to support all Shopify order data types and structures
+- Replaced custom field prefixes (e.g., "order.name") with official Shopify field names (e.g., "name")
+
+### Fixed
+- Limited field mapping options - Now supports all official Shopify Order fields for maximum flexibility
+- Field mapping confusion - Clear grouping and labeling makes it easier to find and map the right fields
+- Shopify API compatibility - All field mappings now use official Shopify field names and paths
+- Field mapping completeness - No more missing fields that users might need for their specific use cases
+
 ## [0.3.0] - 2024-01-XX
 
 ### Added

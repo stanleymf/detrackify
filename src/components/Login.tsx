@@ -28,6 +28,7 @@ export function Login({ onLogin }: LoginProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('Login handler called', loginData)
     setIsLoading(true)
 
     try {
@@ -37,6 +38,7 @@ export function Login({ onLogin }: LoginProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(loginData),
+        credentials: 'include'
       })
 
       const data = await response.json()
@@ -67,6 +69,7 @@ export function Login({ onLogin }: LoginProps) {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('Register handler called', registerData)
     setIsLoading(true)
 
     if (registerData.password !== registerData.confirmPassword) {
@@ -89,6 +92,7 @@ export function Login({ onLogin }: LoginProps) {
           email: registerData.email,
           password: registerData.password,
         }),
+        credentials: 'include'
       })
 
       const data = await response.json()

@@ -80,8 +80,8 @@ export class CloudflareAuthService implements AuthService {
         return { valid: false, error: 'Session expired' }
       }
 
-      // Get user
-      const user = await this.db.getUserByEmail(session.user_id)
+      // Get user by ID
+      const user = await this.db.getUserById(session.user_id)
       if (!user) {
         await this.db.deleteSession(sessionToken)
         return { valid: false, error: 'User not found' }
@@ -144,12 +144,11 @@ export function getSessionTokenFromRequest(request: Request): string | null {
 export function setSessionCookie(sessionToken: string): string {
   const expires = new Date()
   expires.setDate(expires.getDate() + 30)
-  
-  return `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Expires=${expires.toUTCString()}`
+  return `session=${sessionToken}; HttpOnly; Secure; SameSite=None; Path=/; Expires=${expires.toUTCString()}`
 }
 
 export function clearSessionCookie(): string {
-  return 'session=; HttpOnly; Secure; SameSite=Strict; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  return 'session=; HttpOnly; Secure; SameSite=None; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
 }
 
 // Middleware for protecting routes

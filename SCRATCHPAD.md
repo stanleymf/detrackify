@@ -27,11 +27,60 @@
 - ✅ Field mapping persistence and auto-saving
 - ✅ Extract Processing Fields UI protection
 - ✅ Backend Database Integration for Stores
+- ✅ Comprehensive Shopify Order Fields Integration
 
 ### Missing Components
 - ❌ Shopify OAuth flow for store connection
 - ❌ Order dashboard with real-time data
 - ❌ Detrack API integration
+
+## Comprehensive Shopify Order Fields Integration ✅ (v0.4.0)
+
+### Problem Identified
+- **Issue**: Limited field mapping options - only a subset of Shopify fields were available
+- **Symptom**: Users couldn't map to many official Shopify Order fields they needed
+- **Root Cause**: SHOPIFY_FIELDS array contained only basic fields, missing official Shopify Order API fields
+
+### Implementation Details
+- **Complete Shopify Field Coverage**: Added all official Shopify Order API fields (2024-01) for maximum mapping flexibility
+- **Enhanced Settings UI**: Grouped Shopify fields in dropdown by category for better organization
+- **Official Field Names**: Replaced custom prefixes with official Shopify field names (e.g., "name" instead of "order.name")
+- **Advanced Field Support**: Added support for metafields, discount_applications, shipping_lines, and other advanced fields
+- **Improved UX**: Clear visual grouping and labeling makes field selection easier
+
+### User Experience
+- **Complete Field Coverage**: Users can now map to any official Shopify Order field
+- **Organized Field Selection**: Fields grouped by category (Order, Customer, Shipping Address, Billing Address, Line Items, Fulfillments, Advanced)
+- **Clear Visual Hierarchy**: Section headers and separators make field selection intuitive
+- **Maximum Flexibility**: No more missing fields that users might need for their specific use cases
+
+### Technical Implementation
+- **Updated SHOPIFY_FIELDS Array**: Now includes all official Shopify Order API fields:
+  - Order root fields: id, name, order_number, email, phone, created_at, financial_status, etc.
+  - Customer fields: customer.id, customer.first_name, customer.last_name, etc.
+  - Address fields: shipping_address.*, billing_address.*
+  - Line item fields: line_items.*
+  - Fulfillment fields: fulfillments.*
+  - Advanced fields: metafields, discount_applications, shipping_lines
+- **Enhanced Settings Component**: Dropdown now groups fields by category with clear section headers
+- **Official Field Names**: All field mappings now use official Shopify field names and paths
+- **Backward Compatibility**: Existing mappings continue to work with new field structure
+
+### Field Categories Added
+- **Order Fields**: id, name, order_number, email, phone, created_at, updated_at, processed_at, canceled_at, cancel_reason, currency, subtotal_price, total_price, total_tax, financial_status, fulfillment_status, tags, note, customer_locale, status_url, tracking_number, tracking_company, tracking_url
+- **Customer Fields**: customer.id, customer.first_name, customer.last_name, customer.email, customer.phone
+- **Shipping Address Fields**: shipping_address.* (all address components)
+- **Billing Address Fields**: billing_address.* (all address components)
+- **Line Item Fields**: line_items.id, line_items.sku, line_items.title, line_items.variant_title, line_items.quantity, line_items.price, line_items.product_id, line_items.variant_id
+- **Fulfillment Fields**: fulfillments.id, fulfillments.status, fulfillments.tracking_number, fulfillments.tracking_company, fulfillments.tracking_url, fulfillments.created_at, fulfillments.updated_at
+- **Advanced Fields**: metafields, discount_applications, shipping_lines
+
+### Benefits
+- **Complete Shopify Compatibility**: All field mappings now use official Shopify field names
+- **Maximum Flexibility**: Users can map to any field available in the Shopify Order API
+- **Better Organization**: Grouped fields make it easier to find the right field for mapping
+- **Future-Proof**: Supports all current and future Shopify Order API fields
+- **Professional UX**: Clear visual hierarchy and organization improves user experience
 
 ## Frontend-Backend Store Disconnect Fix ✅ (v0.3.0)
 

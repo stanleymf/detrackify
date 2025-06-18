@@ -71,7 +71,7 @@ export function Settings() {
 
   const loadStoresFromDatabase = async () => {
     try {
-      const response = await fetch('/api/stores')
+      const response = await fetch('/api/stores', { credentials: 'include' })
       if (response.ok) {
         const stores = await response.json()
         // Convert database store format to frontend format
@@ -159,7 +159,8 @@ export function Settings() {
           access_token: newStore.apiKey,
           api_version: '2024-01', // Default API version
           webhook_secret: '' // Will be set when webhook is configured
-        })
+        }),
+        credentials: 'include'
       })
 
       if (response.ok) {
@@ -193,7 +194,8 @@ export function Settings() {
     try {
       // Delete from backend database
       const response = await fetch(`/api/stores/${storeId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       })
 
       if (response.ok) {
@@ -559,10 +561,44 @@ export function Settings() {
                         <SelectContent>
                           <SelectItem value="no-mapping">No Mapping</SelectItem>
                           <Separator />
-                          {SHOPIFY_FIELDS.map((shopifyField) => (
-                            <SelectItem key={shopifyField} value={shopifyField}>
-                              {shopifyField}
-                            </SelectItem>
+                          {/* Grouped Shopify fields for clarity */}
+                          <div className="px-2 py-1 text-xs text-muted-foreground font-semibold">Order Fields</div>
+                          {SHOPIFY_FIELDS.filter(f => [
+                            'id','name','order_number','email','phone','created_at','updated_at','processed_at','canceled_at','cancel_reason','currency','subtotal_price','total_price','total_tax','financial_status','fulfillment_status','tags','note','customer_locale','status_url','tracking_number','tracking_company','tracking_url'
+                          ].includes(f)).map(shopifyField => (
+                            <SelectItem key={shopifyField} value={shopifyField}>{shopifyField}</SelectItem>
+                          ))}
+                          <Separator />
+                          <div className="px-2 py-1 text-xs text-muted-foreground font-semibold">Customer Fields</div>
+                          {SHOPIFY_FIELDS.filter(f => f.startsWith('customer.')).map(shopifyField => (
+                            <SelectItem key={shopifyField} value={shopifyField}>{shopifyField}</SelectItem>
+                          ))}
+                          <Separator />
+                          <div className="px-2 py-1 text-xs text-muted-foreground font-semibold">Shipping Address Fields</div>
+                          {SHOPIFY_FIELDS.filter(f => f.startsWith('shipping_address.')).map(shopifyField => (
+                            <SelectItem key={shopifyField} value={shopifyField}>{shopifyField}</SelectItem>
+                          ))}
+                          <Separator />
+                          <div className="px-2 py-1 text-xs text-muted-foreground font-semibold">Billing Address Fields</div>
+                          {SHOPIFY_FIELDS.filter(f => f.startsWith('billing_address.')).map(shopifyField => (
+                            <SelectItem key={shopifyField} value={shopifyField}>{shopifyField}</SelectItem>
+                          ))}
+                          <Separator />
+                          <div className="px-2 py-1 text-xs text-muted-foreground font-semibold">Line Item Fields</div>
+                          {SHOPIFY_FIELDS.filter(f => f.startsWith('line_items.')).map(shopifyField => (
+                            <SelectItem key={shopifyField} value={shopifyField}>{shopifyField}</SelectItem>
+                          ))}
+                          <Separator />
+                          <div className="px-2 py-1 text-xs text-muted-foreground font-semibold">Fulfillment Fields</div>
+                          {SHOPIFY_FIELDS.filter(f => f.startsWith('fulfillments.')).map(shopifyField => (
+                            <SelectItem key={shopifyField} value={shopifyField}>{shopifyField}</SelectItem>
+                          ))}
+                          <Separator />
+                          <div className="px-2 py-1 text-xs text-muted-foreground font-semibold">Advanced/Misc Fields</div>
+                          {SHOPIFY_FIELDS.filter(f => [
+                            'metafields','discount_applications','shipping_lines','billing_address','shipping_address','customer','line_items','fulfillments'
+                          ].includes(f)).map(shopifyField => (
+                            <SelectItem key={shopifyField} value={shopifyField}>{shopifyField}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

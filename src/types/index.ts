@@ -161,19 +161,39 @@ export const DASHBOARD_FIELD_LABELS: Record<string, string> = {
 }
 
 export const SHOPIFY_FIELDS = [
-  "order.name",
-  "order.created_at",
-  "order.updated_at",
-  "order.processed_at",
-  "order.fulfillment_status",
-  "order.tracking_number",
-  "order.tracking_company",
-  "order.tags",
-  "order.note",
+  // Order root fields
+  "id",
+  "name",
+  "order_number",
+  "email",
+  "phone",
+  "created_at",
+  "updated_at",
+  "processed_at",
+  "canceled_at",
+  "cancel_reason",
+  "currency",
+  "subtotal_price",
+  "total_price",
+  "total_tax",
+  "financial_status",
+  "fulfillment_status",
+  "tags",
+  "note",
+  "customer_locale",
+  "status_url",
+  "tracking_number",
+  "tracking_company",
+  "tracking_url",
+
+  // Customer fields
+  "customer.id",
   "customer.first_name",
   "customer.last_name",
   "customer.email",
   "customer.phone",
+
+  // Shipping address fields
   "shipping_address.first_name",
   "shipping_address.last_name",
   "shipping_address.company",
@@ -184,6 +204,8 @@ export const SHOPIFY_FIELDS = [
   "shipping_address.country",
   "shipping_address.zip",
   "shipping_address.phone",
+
+  // Billing address fields
   "billing_address.first_name",
   "billing_address.last_name",
   "billing_address.company",
@@ -194,9 +216,33 @@ export const SHOPIFY_FIELDS = [
   "billing_address.country",
   "billing_address.zip",
   "billing_address.phone",
+
+  // Line items (array, but allow mapping to first/concat)
+  "line_items.id",
   "line_items.sku",
   "line_items.title",
   "line_items.variant_title",
   "line_items.quantity",
   "line_items.price",
+  "line_items.product_id",
+  "line_items.variant_id",
+
+  // Fulfillments (array, allow mapping to first/concat)
+  "fulfillments.id",
+  "fulfillments.status",
+  "fulfillments.tracking_number",
+  "fulfillments.tracking_company",
+  "fulfillments.tracking_url",
+  "fulfillments.created_at",
+  "fulfillments.updated_at",
+
+  // Misc/advanced
+  "metafields",
+  "discount_applications",
+  "shipping_lines",
+  "billing_address",
+  "shipping_address",
+  "customer",
+  "line_items",
+  "fulfillments"
 ] as const

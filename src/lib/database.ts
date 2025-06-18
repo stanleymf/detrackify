@@ -382,6 +382,10 @@ export class DatabaseService {
     return this.db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<User>()
   }
 
+  async getUserById(id: string): Promise<User | null> {
+    return this.db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<User>()
+  }
+
   async createSession(userId: string, sessionToken: string, expiresAt: string): Promise<UserSession> {
     const id = generateUUID()
     const now = new Date().toISOString()

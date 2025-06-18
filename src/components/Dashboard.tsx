@@ -284,7 +284,7 @@ export function Dashboard() {
   // Load orders from database
   const loadOrdersFromDatabase = async () => {
     try {
-      const response = await fetch('/api/orders')
+      const response = await fetch('/api/orders', { credentials: 'include' })
       if (response.ok) {
         const orders = await response.json()
         setOrders(orders)
@@ -307,7 +307,7 @@ export function Dashboard() {
     setFetchResult(null)
     try {
       console.log('Fetching orders from Shopify...')
-      const response = await fetch('/api/fetch-orders', { method: 'POST' })
+      const response = await fetch('/api/fetch-orders', { method: 'POST', credentials: 'include' })
       const data = await response.json()
       console.log('Fetch response:', data)
       

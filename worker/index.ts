@@ -108,11 +108,9 @@ async function handleApiRoutes(
 		})
 	}
 
-	// API routes that require authentication
 	if (path === '/api/stores' && request.method === 'GET') {
 		return handleGetStores(db)
 	}
-
 	if (path === '/api/stores' && request.method === 'POST') {
 		return handleCreateStore(request, db)
 	}
@@ -420,7 +418,62 @@ async function handleGetOrders(request: Request, db: DatabaseService): Promise<R
 			orders = await db.getOrdersByStatus('Ready for Export', limit, offset)
 		}
 
-		return new Response(JSON.stringify(orders), {
+		// Transform database orders to frontend format
+		const transformedOrders = orders.map(dbOrder => {
+			try {
+				const processedData = JSON.parse(dbOrder.processed_data)
+				return {
+					id: dbOrder.id,
+					...processedData,
+					status: dbOrder.status,
+					// Add any additional fields that might be needed
+					created_at: dbOrder.created_at,
+					updated_at: dbOrder.updated_at
+				}
+			} catch (error) {
+				console.error('Error parsing processed data for order:', dbOrder.id, error)
+				// Return a minimal order object if parsing fails
+				return {
+					id: dbOrder.id,
+					deliveryOrderNo: dbOrder.shopify_order_name,
+					status: dbOrder.status,
+					// Add default values for required fields
+					deliveryDate: '',
+					processingDate: '',
+					jobReleaseTime: '',
+					deliveryCompletionTimeWindow: '',
+					trackingNo: '',
+					senderNumberOnApp: '',
+					deliverySequence: '',
+					address: '',
+					companyName: '',
+					postalCode: '',
+					firstName: '',
+					lastName: '',
+					recipientPhoneNo: '',
+					senderPhoneNo: '',
+					instructions: '',
+					assignTo: '',
+					emailsForNotifications: '',
+					zone: '',
+					accountNo: '',
+					deliveryJobOwner: '',
+					senderNameOnApp: '',
+					group: '',
+					noOfShippingLabels: '',
+					attachmentUrl: '',
+					podAt: '',
+					remarks: '',
+					itemCount: '',
+					serviceTime: '',
+					sku: '',
+					description: '',
+					qty: ''
+				}
+			}
+		})
+
+		return new Response(JSON.stringify(transformedOrders), {
 			status: 200,
 			headers: { 'Content-Type': 'application/json' }
 		})
