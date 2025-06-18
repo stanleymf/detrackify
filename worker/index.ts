@@ -1592,10 +1592,7 @@ async function getDetrackConfig(db: DatabaseService): Promise<any> {
 }
 
 function convertToDetrackFormat(orderData: any, orderName: string): any {
-	// Use dashboard fields directly as they are already in the correct format for Detrack
-	// This matches the CSV format that was previously used for manual import
-	
-	console.log('Converting order data to Detrack format using dashboard fields directly:', orderData)
+	console.log('Converting order data to Detrack format:', orderData)
 	
 	// Helper function to safely get field value
 	const getField = (field: string, defaultValue: string = '') => {
@@ -1610,35 +1607,7 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		return phone.replace(/^\+65/, '').replace(/^65/, '')
 	}
 
-	// Helper function to convert time to 24-hour format
-	const convertTo24Hour = (time: string) => {
-		if (!time) return '09:00'
-		
-		// If already in 24-hour format, return as is
-		if (time.includes(':') && !time.includes('am') && !time.includes('pm')) {
-			return time
-		}
-		
-		// Convert 12-hour format to 24-hour format
-		const match = time.match(/(\d+):(\d+)(am|pm)/i)
-		if (match) {
-			let hours = parseInt(match[1])
-			const minutes = match[2]
-			const period = match[3].toLowerCase()
-			
-			if (period === 'pm' && hours !== 12) {
-				hours += 12
-			} else if (period === 'am' && hours === 12) {
-				hours = 0
-			}
-			
-			return `${hours.toString().padStart(2, '0')}:${minutes}`
-		}
-		
-		return '09:00' // Default fallback
-	}
-	
-	// Helper function to get delivery date in DD/MM/YYYY format (as Detrack expects)
+	// Helper function to get delivery date in DD/MM/YYYY format
 	const getDeliveryDate = () => {
 		const deliveryDate = getField('deliveryDate')
 		if (deliveryDate) {
@@ -1646,7 +1615,6 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 			if (deliveryDate.includes('/')) {
 				const parts = deliveryDate.split('/')
 				if (parts.length === 3) {
-					// Already in DD/MM/YYYY format
 					return deliveryDate
 				}
 			}
@@ -1657,13 +1625,6 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 					return `${parts[2]}/${parts[1]}/${parts[0]}`
 				}
 			}
-			// If it's in MM/DD/YYYY format, convert to DD/MM/YYYY
-			if (deliveryDate.includes('/') && deliveryDate.length === 10) {
-				const parts = deliveryDate.split('/')
-				if (parts.length === 3) {
-					return `${parts[1]}/${parts[0]}/${parts[2]}`
-				}
-			}
 			return deliveryDate
 		}
 		// Default to today if no date
@@ -1671,43 +1632,18 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		return `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`
 	}
 	
-	// Map dashboard fields directly to Detrack API fields
-	// This matches the CSV structure that was previously used
+	// Create payload according to Detrack API v2 specification
 	const payload = {
-		// Core delivery information
-		job_id: getField('deliveryOrderNo', orderName).replace('#', ''),
-		date: getDeliveryDate(),
-		time: convertTo24Hour(getField('jobReleaseTime', '09:00')),
-		do: getField('deliveryOrderNo', orderName).replace('#', ''),
-		
-		// Delivery details
-		delivery_type: 'delivery',
-		status: 'pending',
-		
-		// Required top-level fields
-		address: getField('address', ''),
-		phone: cleanPhoneNumber(getField('recipientPhoneNo', '')),
-		recipient_name: `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
-		admin_graphql_api_id: "TEST-ORDER-123",
-		
-		// Required shipping address structure
-		shipping_address: {
-			address1: getField('address', ''),
-			postal_code: getField('postalCode', ''),
-			phone: cleanPhoneNumber(getField('recipientPhoneNo', '')),
-			recipient_name: `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
-			company: getField('companyName', '')
-		},
-		
-		// Additional required fields from validation error
-		order_number: getField('deliveryOrderNo', orderName).replace('#', ''),
-		updated_at: new Date().toISOString(), // Use proper ISO timestamp format
-		line_items: [{
-			title: getField('description', ''),
-			quantity: parseInt(getField('qty', '1')),
-			sku: getField('sku', ''),
-			price: '0.00' // Default price since we don't have it
-		}]
+		"do": getField('deliveryOrderNo', orderName).replace('#', ''),
+		"date": getDeliveryDate(),
+		"time": "09:00", // Default time
+		"delivery_type": "delivery",
+		"status": "pending",
+		"address": getField('address', ''),
+		"phone": cleanPhoneNumber(getField('recipientPhoneNo', '')),
+		"recipient_name": `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
+		"order_number": getField('deliveryOrderNo', orderName).replace('#', ''),
+		"updated_at": new Date().toISOString()
 	}
 	
 	// Remove empty fields to avoid API validation issues
@@ -1715,7 +1651,7 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		Object.entries(payload).filter(([_, value]) => value !== '' && value !== null && value !== undefined)
 	)
 
-	console.log('Converted to Detrack format (using dashboard fields directly):', cleanPayload)
+	console.log('Converted to Detrack format:', cleanPayload)
 	return cleanPayload
 }
 
@@ -1804,31 +1740,18 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 			})
 		}
 		
-		// Test connection using the correct webhook URL structure
+		// Test connection using the correct Detrack API v2 payload structure
 		const testPayload = {
-			do: "TEST-CONNECTION",
-			date: new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY format
-			time: "09:00",
-			delivery_type: "delivery",
-			status: "pending",
-			address: "Test Address",
-			phone: "12345678",
-			recipient_name: "Test Recipient",
-			order_number: "TEST-CONNECTION",
-			updated_at: new Date().toISOString(), // Use proper ISO timestamp format
-			shipping_address: {
-				address1: "Test Address",
-				postal_code: "123456",
-				phone: "12345678",
-				recipient_name: "Test Recipient",
-				company: "Test Company"
-			},
-			line_items: [{
-				title: "Test Item",
-				quantity: 1,
-				sku: "TEST-SKU",
-				price: "0.00"
-			}]
+			"do": "TEST-CONNECTION",
+			"date": new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY format
+			"time": "09:00",
+			"delivery_type": "delivery",
+			"status": "pending",
+			"address": "Test Address",
+			"phone": "12345678",
+			"recipient_name": "Test Recipient",
+			"order_number": "TEST-CONNECTION",
+			"updated_at": new Date().toISOString()
 		}
 		
 		console.log('Testing with payload:', testPayload)
