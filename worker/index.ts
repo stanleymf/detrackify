@@ -1703,7 +1703,10 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		no_of_shipping_labels: getField('noOfShippingLabels', ''),
 		item_count: getField('itemCount', ''),
 		delivery_completion_time_window: getField('deliveryCompletionTimeWindow', ''),
-		processing_date: getField('processingDate', '')
+		processing_date: getField('processingDate', ''),
+		
+		// Shopify-specific field required by Detrack
+		admin_graphql_api_id: getField('shopifyOrderId', orderName.replace('#', ''))
 	}
 	
 	// Remove empty fields to avoid API validation issues
@@ -1807,7 +1810,8 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 			address: "Test Address",
 			phone: "12345678",
 			recipient_name: "Test Recipient",
-			delivery_type: "delivery"
+			delivery_type: "delivery",
+			admin_graphql_api_id: "TEST-ORDER-123"
 		}
 		
 		console.log('Testing with payload:', testPayload)
