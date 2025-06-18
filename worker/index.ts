@@ -1706,7 +1706,17 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		processing_date: getField('processingDate', ''),
 		
 		// Shopify-specific field required by Detrack
-		admin_graphql_api_id: getField('shopifyOrderId', orderName.replace('#', ''))
+		admin_graphql_api_id: getField('shopifyOrderId', orderName.replace('#', '')),
+		
+		// Additional required fields from validation error
+		order_number: getField('deliveryOrderNo', orderName).replace('#', ''),
+		updated_at: new Date().toISOString(),
+		line_items: [{
+			title: getField('description', ''),
+			quantity: parseInt(getField('qty', '1')),
+			sku: getField('sku', ''),
+			price: '0.00' // Default price since we don't have it
+		}]
 	}
 	
 	// Remove empty fields to avoid API validation issues
@@ -1811,7 +1821,15 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 			phone: "12345678",
 			recipient_name: "Test Recipient",
 			delivery_type: "delivery",
-			admin_graphql_api_id: "TEST-ORDER-123"
+			admin_graphql_api_id: "TEST-ORDER-123",
+			order_number: "TEST-CONNECTION",
+			updated_at: new Date().toISOString(),
+			line_items: [{
+				title: "Test Item",
+				quantity: 1,
+				sku: "TEST-SKU",
+				price: "0.00"
+			}]
 		}
 		
 		console.log('Testing with payload:', testPayload)
