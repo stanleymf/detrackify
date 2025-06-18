@@ -1485,13 +1485,14 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 					throw new Error(`Missing required fields: ${missingFields.join(', ')}`)
 				}
 				
-				console.log(`Sending to Detrack API: https://connect.detrack.com/api/v1/webhook/detrack/jobs/create/${detrackConfig.apiKey}`)
+				console.log(`Sending to Detrack API: https://connect.detrack.com/api/v1/webhook/detrack/jobs/create`)
 				console.log(`Using delivery order number: ${detrackPayload.do}`)
 				
-				const response = await fetch(`https://connect.detrack.com/api/v1/webhook/detrack/jobs/create/${detrackConfig.apiKey}`, {
+				const response = await fetch(`https://connect.detrack.com/api/v1/webhook/detrack/jobs/create`, {
 					method: 'POST',
 					headers: {
-						'Content-Type': 'application/json'
+						'Content-Type': 'application/json',
+						'X-API-KEY': detrackConfig.apiKey
 					},
 					body: JSON.stringify(detrackPayload)
 				})
@@ -1833,11 +1834,12 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 		console.log('Testing with payload:', testPayload)
 		console.log('Using API key:', detrackConfig.apiKey)
 		
-		// Use the webhook URL structure we discovered
-		const response = await fetch(`https://connect.detrack.com/api/v1/webhook/detrack/jobs/create/${detrackConfig.apiKey}`, {
+		// Use the correct API endpoint with X-API-KEY header
+		const response = await fetch(`https://connect.detrack.com/api/v1/webhook/detrack/jobs/create`, {
 			method: 'POST',
 			headers: {
-				'Content-Type': 'application/json'
+				'Content-Type': 'application/json',
+				'X-API-KEY': detrackConfig.apiKey
 			},
 			body: JSON.stringify(testPayload)
 		})
@@ -1871,8 +1873,8 @@ async function handleUpdateDetrackApiKey(db: DatabaseService): Promise<Response>
 	try {
 		console.log('Updating Detrack API key to correct value...')
 		
-		// The correct API key from the webhook URL
-		const correctApiKey = '10e3e77f4c4b42bc945bf8cbcc055cec0c826540a67681f82788cc17008b67d9'
+		// The correct API key from the Detrack API v2 documentation
+		const correctApiKey = '9943520c80ee2aaad2cc80c29bdfb298e85feed021ef0328'
 		
 		// Get current Detrack configuration
 		const detrackConfig = await getDetrackConfig(db)

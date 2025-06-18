@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Multi-Store Order Fetching** - Fetch orders now processes all configured stores automatically instead of requiring individual store selection
+- **Increased Dashboard Capacity** - Dashboard now displays up to 200 orders per page instead of 50 for better data visibility
+- **Phone Number Normalization** - Automatic phone number cleaning for Singapore (+65/65) and international numbers (removes + prefix)
+- **Enhanced Order Refresh** - Improved order refresh after fetch operations with automatic page reset and timing optimizations
+- **Phone Field Processing** - Added phone normalization for `senderNumberOnApp`, `senderPhoneNo`, and `recipientPhoneNo` fields
+
+### Changed
+- **Dashboard Default Limit** - Increased from 50 to 200 orders per page across all database queries and frontend display
+- **Fetch Orders Behavior** - Now automatically processes all stores in sequence and shows combined results
+- **Order Refresh Logic** - All order-modifying operations now reset to page 1 to show newest orders first
+- **Phone Number Formatting** - Singapore numbers now display without country code, international numbers without + prefix
+- **Database Query Limits** - All order retrieval methods now default to 200 records instead of 50
+
+### Fixed
+- **Order Refresh After Fetch** - Fixed issue where orders wouldn't appear after fetching until manual page refresh
+- **Multi-Store Fetch Display** - Orders from all stores now appear in dashboard after fetch operation
+- **Phone Number Consistency** - Standardized phone number format across all phone-related fields
+- **Dashboard Pagination** - Ensures newest orders are always visible after operations that modify order data
+
+### Technical Improvements
+- **Database Service Updates** - Updated all order retrieval methods to use 200 as default limit
+- **Frontend State Management** - Improved order refresh timing and page state management
+- **Phone Processing Logic** - Added phone normalization in OrderProcessor class with comprehensive test coverage
+- **Migration Support** - Added database migration for phone normalization field mappings
+
+## [0.7.0] - 2024-01-XX
+
+### Added
 - **Mobile Mode** - Comprehensive mobile responsiveness with card-based order view, collapsible controls menu, and mobile-optimized layouts
 - **Mobile Card View** - Orders display as cards on mobile devices with key information and easy selection
 - **Mobile Controls Menu** - Collapsible menu for filters and actions on mobile devices

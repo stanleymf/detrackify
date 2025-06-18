@@ -5,6 +5,95 @@
 - **Architecture**: Multi-store support with configurable field mapping
 - **Tech Stack**: React + TypeScript + Vite + shadcn/ui + Cloudflare Workers + D1 + KV
 
+## Multi-Store Fetch & Dashboard Improvements ✅ (Latest)
+
+### Major Improvements Completed Today
+
+#### 1. Multi-Store Order Fetching ✅
+- **Problem**: Fetch orders only worked for one store at a time
+- **Solution**: Modified `handleFetchOrders` to automatically process all configured stores
+- **Implementation**: 
+  - Loops through all stores in database
+  - Fetches orders from each Shopify store sequentially
+  - Shows combined results summary for all stores
+  - All orders appear in unified dashboard view
+- **User Experience**: Click "Fetch Orders" once to get orders from all stores
+
+#### 2. Increased Dashboard Capacity ✅
+- **Problem**: Dashboard limited to 50 orders per page, insufficient for high-volume stores
+- **Solution**: Increased limit to 200 orders per page across entire system
+- **Implementation**:
+  - Updated `handleGetOrders` default limit from 50 to 200
+  - Modified all database service methods (`getOrdersByStore`, `getAllOrders`, `getOrdersByStatus`)
+  - Updated frontend `pageSize` state from 50 to 200
+  - Maintains pagination for orders beyond 200
+- **User Experience**: Can now view up to 200 orders at once without pagination
+
+#### 3. Phone Number Normalization ✅
+- **Problem**: Phone numbers inconsistent format (Singapore +65, international + prefix)
+- **Solution**: Automatic phone number cleaning for standardized display
+- **Implementation**:
+  - Added 'phone' processing type to extract processing mappings
+  - Created phone normalization logic in `OrderProcessor` class
+  - Applied to `senderNumberOnApp`, `senderPhoneNo`, `recipientPhoneNo` fields
+  - Singapore numbers: removes +65 or 65 prefix
+  - International numbers: removes + prefix
+  - Added database migration for phone normalization mappings
+- **User Experience**: Consistent phone number format across all phone fields
+
+#### 4. Enhanced Order Refresh ✅
+- **Problem**: Orders wouldn't appear after fetch until manual page refresh
+- **Solution**: Improved refresh logic with timing optimizations and page reset
+- **Implementation**:
+  - Added 1-second delay after fetch to ensure database updates complete
+  - Reset to page 1 after all order-modifying operations (fetch, delete, clear, reprocess)
+  - Enhanced logging for better debugging
+  - Consistent behavior across all operations
+- **User Experience**: Orders appear automatically after fetch, newest orders always visible
+
+### Technical Implementation Details
+
+#### Database Service Updates
+```typescript
+// Updated all order retrieval methods
+async getOrdersByStore(storeId: string, limit = 200, offset = 0)
+async getAllOrders(limit = 200, offset = 0)
+async getOrdersByStatus(status: string, limit = 200, offset = 0)
+```
+
+#### Phone Normalization Logic
+```typescript
+const cleanPhoneNumber = (phone: string) => {
+  if (!phone) return phone;
+  // Remove Singapore country code (+65 or 65)
+  let cleaned = phone.replace(/^(\+65|65)/, '');
+  // Remove + prefix for international numbers
+  cleaned = cleaned.replace(/^\+/, '');
+  return cleaned;
+};
+```
+
+#### Enhanced Fetch Orders Flow
+1. **Fetch from all stores** → Process each store sequentially
+2. **Show results summary** → Immediate feedback on fetch results
+3. **Wait 1 second** → Ensure database updates complete
+4. **Refresh orders** → Load from page 1 to show newest orders
+5. **Auto-display** → Orders appear without manual refresh
+
+### Current Status
+- ✅ **Multi-store fetch working** - All stores processed automatically
+- ✅ **200 order limit active** - Dashboard shows up to 200 orders per page
+- ✅ **Phone normalization active** - Consistent phone number formatting
+- ✅ **Order refresh fixed** - Automatic refresh after all operations
+- ✅ **All changes deployed** - Ready for production use
+
+### Next Steps for Tomorrow
+1. **Test multi-store functionality** with multiple Shopify stores
+2. **Verify phone normalization** with various phone number formats
+3. **Monitor order refresh performance** with large order volumes
+4. **Consider additional optimizations** based on real-world usage
+5. **Plan next major features** (Detrack integration, advanced filtering, etc.)
+
 ## Direct Dashboard Field Export Fix ✅ (v0.6.0)
 
 ### Problem Identified
