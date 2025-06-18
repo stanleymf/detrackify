@@ -1,0 +1,202 @@
+export interface Order {
+  id: string
+  deliveryOrderNo: string
+  deliveryDate: string
+  processingDate: string
+  jobReleaseTime: string
+  deliveryCompletionTimeWindow: string
+  trackingNo: string
+  senderNumberOnApp: string
+  deliverySequence: string
+  address: string
+  companyName: string
+  postalCode: string
+  firstName: string
+  lastName: string
+  recipientPhoneNo: string
+  senderPhoneNo: string
+  instructions: string
+  assignTo: string
+  emailsForNotifications: string
+  zone: string
+  accountNo: string
+  deliveryJobOwner: string
+  senderNameOnApp: string
+  group: string
+  noOfShippingLabels: string
+  attachmentUrl: string
+  status: "Ready for Export" | "Exported" | "Error"
+  podAt: string
+  remarks: string
+  itemCount: string
+  serviceTime: string
+  sku: string
+  description: string
+  qty: string
+}
+
+export interface ShopifyStore {
+  id: string
+  name: string
+  url: string
+  apiKey: string
+  connected: boolean
+}
+
+// Global Field Mapping - maps multiple Shopify fields to one Dashboard field
+export interface GlobalFieldMapping {
+  dashboardField: string
+  shopifyFields: string[]
+  separator: string
+  noMapping: boolean
+}
+
+// Extract Processing Mapping - special fields that require logic processing
+export interface ExtractProcessingMapping {
+  dashboardField: string
+  processingType: 'date' | 'time' | 'description' | 'itemCount'
+  sourceField: string // e.g., 'order.tags', 'line_items'
+  format?: string // for date/time formatting
+}
+
+// Dashboard Column Configuration - for auto-saving column preferences
+export interface DashboardColumnConfig {
+  field: keyof Order
+  width: number
+  visible: boolean
+}
+
+export interface AppSettings {
+  shopifyStores: ShopifyStore[]
+  globalFieldMappings: GlobalFieldMapping[]
+  extractProcessingMappings: ExtractProcessingMapping[]
+  dashboardConfig?: {
+    columnConfigs: DashboardColumnConfig[]
+  }
+}
+
+// Special processing fields that require logic
+export const EXTRACT_PROCESSING_FIELDS = [
+  'deliveryDate',
+  'processingDate', 
+  'jobReleaseTime',
+  'deliveryCompletionTimeWindow',
+  'description',
+  'noOfShippingLabels',
+  'itemCount'
+] as const
+
+export type ExtractProcessingField = typeof EXTRACT_PROCESSING_FIELDS[number]
+
+export const DASHBOARD_FIELDS = [
+  "deliveryOrderNo",
+  "deliveryDate",
+  "processingDate",
+  "jobReleaseTime",
+  "deliveryCompletionTimeWindow",
+  "trackingNo",
+  "senderNumberOnApp",
+  "deliverySequence",
+  "address",
+  "companyName",
+  "postalCode",
+  "firstName",
+  "lastName",
+  "recipientPhoneNo",
+  "senderPhoneNo",
+  "instructions",
+  "assignTo",
+  "emailsForNotifications",
+  "zone",
+  "accountNo",
+  "deliveryJobOwner",
+  "senderNameOnApp",
+  "group",
+  "noOfShippingLabels",
+  "attachmentUrl",
+  "status",
+  "podAt",
+  "remarks",
+  "itemCount",
+  "serviceTime",
+  "sku",
+  "description",
+  "qty",
+] as const
+
+export const DASHBOARD_FIELD_LABELS: Record<string, string> = {
+  deliveryOrderNo: "Delivery Order (D.O.) No.",
+  deliveryDate: "Delivery Date",
+  processingDate: "Processing Date",
+  jobReleaseTime: "Job Release Time",
+  deliveryCompletionTimeWindow: "Delivery Completion Time Window",
+  trackingNo: "Tracking No.",
+  senderNumberOnApp: "Sender's number to appear on app",
+  deliverySequence: "Delivery Sequence",
+  address: "Address",
+  companyName: "Company Name",
+  postalCode: "Postal Code",
+  firstName: "First Name",
+  lastName: "Last Name",
+  recipientPhoneNo: "Recipient's Phone No.",
+  senderPhoneNo: "Sender's Phone No.",
+  instructions: "Instructions",
+  assignTo: "Assign to",
+  emailsForNotifications: "Emails For Notifications",
+  zone: "Zone",
+  accountNo: "Account No.",
+  deliveryJobOwner: "Delivery Job Owner",
+  senderNameOnApp: "Sender's name to appear on app",
+  group: "Group",
+  noOfShippingLabels: "No. of Shipping Labels",
+  attachmentUrl: "Attachment (URL)",
+  status: "Status",
+  podAt: "POD at",
+  remarks: "Remarks",
+  itemCount: "Item count",
+  serviceTime: "Service Time",
+  sku: "SKU",
+  description: "Description",
+  qty: "Qty",
+}
+
+export const SHOPIFY_FIELDS = [
+  "order.name",
+  "order.created_at",
+  "order.updated_at",
+  "order.processed_at",
+  "order.fulfillment_status",
+  "order.tracking_number",
+  "order.tracking_company",
+  "order.tags",
+  "order.note",
+  "customer.first_name",
+  "customer.last_name",
+  "customer.email",
+  "customer.phone",
+  "shipping_address.first_name",
+  "shipping_address.last_name",
+  "shipping_address.company",
+  "shipping_address.address1",
+  "shipping_address.address2",
+  "shipping_address.city",
+  "shipping_address.province",
+  "shipping_address.country",
+  "shipping_address.zip",
+  "shipping_address.phone",
+  "billing_address.first_name",
+  "billing_address.last_name",
+  "billing_address.company",
+  "billing_address.address1",
+  "billing_address.address2",
+  "billing_address.city",
+  "billing_address.province",
+  "billing_address.country",
+  "billing_address.zip",
+  "billing_address.phone",
+  "line_items.sku",
+  "line_items.title",
+  "line_items.variant_title",
+  "line_items.quantity",
+  "line_items.price",
+] as const
