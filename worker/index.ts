@@ -1485,10 +1485,10 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 					throw new Error(`Missing required fields: ${missingFields.join(', ')}`)
 				}
 				
-				console.log(`Sending to Detrack API: https://connect.detrack.com/api/v1/webhook/detrack/jobs/create`)
+				console.log(`Sending to Detrack API: https://app.detrack.com/api/v2/dn/jobs`)
 				console.log(`Using delivery order number: ${detrackPayload.do}`)
 				
-				const response = await fetch(`https://connect.detrack.com/api/v1/webhook/detrack/jobs/create`, {
+				const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
@@ -1834,8 +1834,8 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 		console.log('Testing with payload:', testPayload)
 		console.log('Using API key:', detrackConfig.apiKey)
 		
-		// Use the correct API endpoint with X-API-KEY header
-		const response = await fetch(`https://connect.detrack.com/api/v1/webhook/detrack/jobs/create`, {
+		// Use the correct Detrack API v2 endpoint
+		const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
