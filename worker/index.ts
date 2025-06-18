@@ -1751,7 +1751,7 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 				{
 					"type": "Delivery",
 					"do_number": "TEST-CONNECTION",
-					"date": "2018-06-14",
+					"date": new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
 					"tracking_number": "T0",
 					"order_number": "TEST-CONNECTION",
 					"address": "Test Address",
