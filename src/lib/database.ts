@@ -465,7 +465,7 @@ export class DatabaseService {
       
       const mappings = (result.results || []).map(row => ({
         dashboardField: row.dashboard_field,
-        processingType: row.processing_type as 'date' | 'time' | 'description' | 'itemCount',
+        processingType: row.processing_type as 'date' | 'time' | 'description' | 'itemCount' | 'phone',
         sourceField: row.source_field,
         format: row.format || undefined
       }))

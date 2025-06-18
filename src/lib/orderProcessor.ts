@@ -192,6 +192,33 @@ export class OrderProcessor {
   }
 
   /**
+   * Normalize phone number by removing country codes and formatting
+   * - Remove +65 or 65 prefix for Singapore numbers
+   * - Remove + sign for foreign numbers
+   * - Remove spaces, dashes, parentheses
+   */
+  normalizePhoneNumber(phone: string): string {
+    if (!phone) return ''
+    
+    // Remove spaces, dashes, parentheses
+    let cleaned = phone.replace(/[\s\-()]/g, '')
+    
+    // Remove leading +65 or 65 for Singapore numbers
+    if (cleaned.startsWith('+65')) {
+      cleaned = cleaned.slice(3)
+    } else if (cleaned.startsWith('65')) {
+      cleaned = cleaned.slice(2)
+    }
+    
+    // For foreign numbers, remove leading +
+    if (cleaned.startsWith('+')) {
+      cleaned = cleaned.slice(1)
+    }
+    
+    return cleaned
+  }
+
+  /**
    * Process a specific field based on its type
    */
   processField(field: ExtractProcessingField): string {
@@ -211,6 +238,12 @@ export class OrderProcessor {
         return this.extractGroup()
       case 'description':
         return this.extractDescription()
+      case 'senderNumberOnApp':
+        return this.normalizePhoneNumber(this.order.billing_address?.phone || '')
+      case 'senderPhoneNo':
+        return this.normalizePhoneNumber(this.order.billing_address?.phone || '')
+      case 'recipientPhoneNo':
+        return this.normalizePhoneNumber(this.order.shipping_address?.phone || '')
       default:
         return ''
     }
@@ -261,6 +294,9 @@ export class OrderProcessor {
       noOfShippingLabels: this.processField('noOfShippingLabels'),
       itemCount: this.processField('itemCount'),
       description: this.processField('description'),
+      senderNumberOnApp: this.processField('senderNumberOnApp'),
+      senderPhoneNo: this.processField('senderPhoneNo'),
+      recipientPhoneNo: this.processField('recipientPhoneNo'),
     }
   }
 }
@@ -304,9 +340,11 @@ export function processShopifyOrder(
       if (shopifyField.startsWith('line_items.')) {
         // Get from current line item
         const field = shopifyField.replace('line_items.', '')
-        const value = order.line_items[0][field as keyof typeof order.line_items]
-        if (value !== undefined && value !== null && value !== '') {
-          values.push(String(value))
+        if (order.line_items && order.line_items.length > 0) {
+          const value = order.line_items[0][field as keyof typeof order.line_items[0]]
+          if (value !== undefined && value !== null && value !== '') {
+            values.push(String(value))
+          }
         }
       } else {
         // Get from order root

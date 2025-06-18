@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - **Mobile Controls Menu** - Collapsible menu for filters and actions on mobile devices
 - **Mobile Layout Optimizations** - Responsive stats cards, Express orders grid, and header layout for mobile screens
 - **View Mode Toggle** - Manual toggle between Auto (responsive), Mobile (card view), and Desktop (table view) modes
+- **CSV Export** - Export filtered orders to CSV file with all visible columns and proper data formatting
 
 ### Fixed
 - **Store Breakdown Calculation** - Fixed store breakdown stat card to count unique orders instead of line items per store prefix

@@ -888,6 +888,24 @@ async function handleGetGlobalFieldMappings(db: DatabaseService): Promise<Respon
 					processingType: 'itemCount',
 					sourceField: 'line_items',
 					format: 'sum_quantities'
+				},
+				{
+					dashboardField: 'senderNumberOnApp',
+					processingType: 'phone',
+					sourceField: 'billing_address.phone',
+					format: 'normalize'
+				},
+				{
+					dashboardField: 'senderPhoneNo',
+					processingType: 'phone',
+					sourceField: 'billing_address.phone',
+					format: 'normalize'
+				},
+				{
+					dashboardField: 'recipientPhoneNo',
+					processingType: 'phone',
+					sourceField: 'shipping_address.phone',
+					format: 'normalize'
 				}
 			]
 			

@@ -540,39 +540,88 @@ export function Dashboard() {
   }
 
   const handleReprocessOrders = async () => {
+    if (confirm('Are you sure you want to reprocess all orders? This will re-fetch and process all orders from Shopify.')) {
+      try {
+        setFetchingOrders(true)
+        setFetchResult(null)
+        
+        console.log('Starting order reprocessing...')
+        const response = await fetch('/api/reprocess-orders', { 
+          method: 'POST', 
+          credentials: 'include' 
+        })
+        
+        console.log('Reprocess response status:', response.status)
+        
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('Reprocess error response:', errorText)
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        
+        const responseData = await response.json()
+        console.log('Reprocess response data:', responseData)
+        
+        // Refresh orders from database
+        await loadOrdersFromDatabase()
+        
+        // Show success message
+        setFetchResult('Successfully reprocessed all orders from Shopify')
+        console.log('Order reprocessing completed successfully')
+        
+      } catch (error: any) {
+        console.error('Error reprocessing orders:', error)
+        setFetchResult('Error reprocessing orders: ' + error.message)
+      } finally {
+        setFetchingOrders(false)
+      }
+    }
+  }
+
+  const handleExportToCSV = () => {
+    if (filteredOrders.length === 0) {
+      alert('No orders to export')
+      return
+    }
+
     try {
-      setFetchingOrders(true)
-      console.log('Reprocessing orders...')
+      // Get visible columns
+      const visibleColumns = columnConfigs.filter(config => config.visible)
       
-      const response = await fetch('/api/reprocess-orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      // Create CSV header
+      const headers = visibleColumns.map(config => DASHBOARD_FIELD_LABELS[config.field])
+      const csvHeader = headers.join(',')
+      
+      // Create CSV rows
+      const csvRows = filteredOrders.map(order => {
+        return visibleColumns.map(config => {
+          const value = order[config.field] || ''
+          // Escape commas and quotes in CSV values
+          const escapedValue = String(value).replace(/"/g, '""')
+          return `"${escapedValue}"`
+        }).join(',')
       })
       
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to reprocess orders')
-      }
+      // Combine header and rows
+      const csvContent = [csvHeader, ...csvRows].join('\n')
       
-      const result = await response.json()
-      console.log('Reprocess orders result:', result)
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `detrackify-orders-${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
       
-      if (result.success) {
-        // Show success message
-        setFetchResult(`✅ Successfully reprocessed ${result.results[0]?.reprocessed || 0} orders.`)
-        
-        // Refresh the orders list
-        await loadOrdersFromDatabase()
-      } else {
-        throw new Error(result.error || 'Failed to reprocess orders')
-      }
-    } catch (error) {
-      console.error('Error reprocessing orders:', error)
-      setFetchResult(`❌ Error: ${error instanceof Error ? error.message : 'Failed to reprocess orders'}`)
-    } finally {
-      setFetchingOrders(false)
+      // Show success message
+      setFetchResult(`Successfully exported ${filteredOrders.length} orders to CSV`)
+      
+    } catch (error: any) {
+      console.error('Error exporting to CSV:', error)
+      setFetchResult('Error exporting to CSV: ' + error.message)
     }
   }
 
@@ -614,6 +663,14 @@ export function Dashboard() {
           >
             <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
             {fetchingOrders ? "Reprocessing..." : "Reprocess Orders"}
+          </Button>
+          <Button 
+            onClick={handleExportToCSV} 
+            disabled={fetchingOrders} 
+            className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white"
+          >
+            <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
+            {fetchingOrders ? "Exporting..." : "Export to CSV"}
           </Button>
         </div>
       </div>
@@ -690,19 +747,7 @@ export function Dashboard() {
           <div className="flex justify-between items-center">
             <CardTitle className="text-olive-600">Order Dashboard</CardTitle>
             
-            {/* Mobile Menu Button */}
-            {isMobile && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden"
-              >
-                {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-              </Button>
-            )}
-            
-            {/* View Mode Toggle */}
+            {/* View Mode Toggle - Moved to top right */}
             <div className="flex items-center gap-1">
               <Button
                 variant={viewMode === 'auto' ? 'default' : 'outline'}
@@ -734,6 +779,21 @@ export function Dashboard() {
                 {!isMobile && 'Desktop'}
               </Button>
             </div>
+          </div>
+          
+          {/* Controls Section */}
+          <div className="flex justify-between items-center mt-4">
+            {/* Mobile Menu Button */}
+            {isMobile && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden"
+              >
+                {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </Button>
+            )}
             
             {/* Desktop Controls */}
             <div className={`gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
@@ -800,6 +860,13 @@ export function Dashboard() {
                 className="bg-olive-600 hover:bg-olive-700 text-white"
               >
                 Export to Detrack ({selectedOrders.size})
+              </Button>
+              <Button
+                onClick={handleExportToCSV}
+                disabled={filteredOrders.length === 0}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                Export to CSV ({filteredOrders.length})
               </Button>
             </div>
           </div>
@@ -874,33 +941,14 @@ export function Dashboard() {
                 </Button>
               </div>
               
-              {/* View Mode Toggle for Mobile */}
-              <div className="flex gap-1 pt-2 border-t">
+              {/* CSV Export for Mobile */}
+              <div className="flex gap-2">
                 <Button
-                  variant={viewMode === 'auto' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('auto')}
-                  className="flex-1 text-xs"
+                  onClick={handleExportToCSV}
+                  disabled={filteredOrders.length === 0}
+                  className="bg-green-600 hover:bg-green-700 text-white flex-1"
                 >
-                  Auto
-                </Button>
-                <Button
-                  variant={viewMode === 'mobile' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('mobile')}
-                  className="flex-1 text-xs"
-                >
-                  <Smartphone className="h-3 w-3 mr-1" />
-                  Cards
-                </Button>
-                <Button
-                  variant={viewMode === 'desktop' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('desktop')}
-                  className="flex-1 text-xs"
-                >
-                  <Monitor className="h-3 w-3 mr-1" />
-                  Table
+                  Export to CSV ({filteredOrders.length})
                 </Button>
               </div>
             </div>
