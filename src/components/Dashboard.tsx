@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Eye, Calendar, Clock, RefreshCw, Menu, X } from "lucide-react"
+import { Eye, Calendar, Clock, RefreshCw, Menu, X, Smartphone, Monitor } from "lucide-react"
 import { type Order, DASHBOARD_FIELD_LABELS, type DashboardColumnConfig } from "@/types"
 import { storage } from "@/lib/storage"
 import { useIsMobile } from "@/components/hooks/use-mobile"
@@ -41,6 +41,7 @@ export function Dashboard() {
   // Mobile state
   const isMobile = useIsMobile()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'auto' | 'mobile' | 'desktop'>('auto')
   
   // Fetch orders loading state
   const [fetchingOrders, setFetchingOrders] = useState(false)
@@ -575,6 +576,9 @@ export function Dashboard() {
     }
   }
 
+  // Determine actual view mode
+  const actualViewMode = viewMode === 'auto' ? (isMobile ? 'mobile' : 'desktop') : viewMode
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
@@ -697,6 +701,39 @@ export function Dashboard() {
                 {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
               </Button>
             )}
+            
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant={viewMode === 'auto' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('auto')}
+                className="text-xs"
+                title="Auto (responsive)"
+              >
+                Auto
+              </Button>
+              <Button
+                variant={viewMode === 'mobile' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('mobile')}
+                className="text-xs"
+                title="Mobile card view"
+              >
+                <Smartphone className="h-3 w-3 mr-1" />
+                {!isMobile && 'Mobile'}
+              </Button>
+              <Button
+                variant={viewMode === 'desktop' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('desktop')}
+                className="text-xs"
+                title="Desktop table view"
+              >
+                <Monitor className="h-3 w-3 mr-1" />
+                {!isMobile && 'Desktop'}
+              </Button>
+            </div>
             
             {/* Desktop Controls */}
             <div className={`gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
@@ -836,13 +873,43 @@ export function Dashboard() {
                   Export ({selectedOrders.size})
                 </Button>
               </div>
+              
+              {/* View Mode Toggle for Mobile */}
+              <div className="flex gap-1 pt-2 border-t">
+                <Button
+                  variant={viewMode === 'auto' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('auto')}
+                  className="flex-1 text-xs"
+                >
+                  Auto
+                </Button>
+                <Button
+                  variant={viewMode === 'mobile' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('mobile')}
+                  className="flex-1 text-xs"
+                >
+                  <Smartphone className="h-3 w-3 mr-1" />
+                  Cards
+                </Button>
+                <Button
+                  variant={viewMode === 'desktop' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('desktop')}
+                  className="flex-1 text-xs"
+                >
+                  <Monitor className="h-3 w-3 mr-1" />
+                  Table
+                </Button>
+              </div>
             </div>
           )}
         </CardHeader>
         <CardContent>
           <div className="border rounded-lg overflow-hidden">
             {/* Mobile Card View */}
-            {isMobile ? (
+            {actualViewMode === 'mobile' && (
               <div className="space-y-3 p-4">
                 {/* Select All for Mobile */}
                 <div className="flex items-center gap-2 pb-2 border-b">
@@ -919,8 +986,9 @@ export function Dashboard() {
                   </div>
                 )}
               </div>
-            ) : (
-              /* Desktop Table View */
+            )}
+            {/* Desktop Table View */}
+            {actualViewMode === 'desktop' && (
               <div className="overflow-x-auto">
                 <div
                   className="min-w-full"
