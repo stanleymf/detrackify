@@ -1672,6 +1672,15 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 		recipient_name: `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
 		company: getField('companyName', ''),
 		
+		// Required shipping address structure
+		shipping_address: {
+			address1: getField('address', ''),
+			postal_code: getField('postalCode', ''),
+			phone: cleanPhoneNumber(getField('recipientPhoneNo', '')),
+			recipient_name: `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
+			company: getField('companyName', '')
+		},
+		
 		// Additional information
 		instructions: getField('instructions', ''),
 		email: getField('emailsForNotifications', ''),
@@ -1824,6 +1833,13 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 			admin_graphql_api_id: "TEST-ORDER-123",
 			order_number: "TEST-CONNECTION",
 			updated_at: new Date().toISOString(), // Use proper ISO timestamp format
+			shipping_address: {
+				address1: "Test Address",
+				postal_code: "123456",
+				phone: "12345678",
+				recipient_name: "Test Recipient",
+				company: "Test Company"
+			},
 			line_items: [{
 				title: "Test Item",
 				quantity: 1,
