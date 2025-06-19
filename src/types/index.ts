@@ -250,3 +250,45 @@ export const SHOPIFY_FIELDS = [
   "line_items",
   "fulfillments"
 ] as const
+
+export interface StoreProduct {
+  id: string;
+  title: string;
+  variantTitle: string;
+  price: string;
+  handle: string;
+  tags: string[];
+  orderTags: string[];
+  storeId: string;
+  storeDomain: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedProduct {
+  id: string;
+  productId: string;
+  title: string;
+  variantTitle: string;
+  price: string;
+  handle: string;
+  tags: string[];
+  orderTags: string[];
+  storeId: string;
+  storeDomain: string;
+  userId: string;
+  createdAt: string;
+}
+
+export interface TagFilter {
+  id: string;
+  tag: string;
+  storeId: string;
+  createdAt: string;
+}
+
+export interface ProductLabel {
+  id: string;
+  productName: string;
+  label: string;
+}

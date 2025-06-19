@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Input } from './ui/input';
-import { Badge } from './ui/badge';
-import { Checkbox } from './ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   Package, 
   Users, 
@@ -15,14 +16,15 @@ import {
   Trash2, 
   Search, 
   Save,
-  X
+  X,
+  Bookmark,
+  BookmarkCheck,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
-
-interface ProductLabel {
-  id: string;
-  productName: string;
-  label: string;
-}
+import { Label } from '@/components/ui/label';
+import type { ProductLabel, StoreProduct, TagFilter, SavedProduct } from '@/types';
+import { parseCSV } from '@/lib/utils';
 
 interface DriverInfo {
   id: string;
@@ -33,7 +35,11 @@ interface DriverInfo {
   pricePerDrop: string;
 }
 
-export default function Info() {
+export default function Info({ 
+  viewMode = 'auto'
+}: { 
+  viewMode?: 'auto' | 'mobile' | 'desktop'
+}) {
   const [productLabels, setProductLabels] = useState<ProductLabel[]>([]);
   const [driverInfos, setDriverInfos] = useState<DriverInfo[]>([]);
   const [newProductName, setNewProductName] = useState('');
@@ -70,13 +76,117 @@ export default function Info() {
   const productFileInputRef = useRef<HTMLInputElement>(null);
   const driverFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Store Products state
+  const [selectedStore, setSelectedStore] = useState<string>("")
+  const [stores, setStores] = useState<{ id: string; name: string; url: string }[]>([])
+  const [tagFilters, setTagFilters] = useState<TagFilter[]>([])
+  const [newTagFilter, setNewTagFilter] = useState("")
+  const [storeProducts, setStoreProducts] = useState<StoreProduct[]>([])
+  const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([])
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
+  const [savedProductIds, setSavedProductIds] = useState<Set<string>>(new Set())
+
+  // Saved Products enhanced features
+  const [savedProductsSearchTerm, setSavedProductsSearchTerm] = useState('');
+  const [savedProductsCollapsed, setSavedProductsCollapsed] = useState(false);
+  const [savedProductsCurrentPage, setSavedProductsCurrentPage] = useState(1);
+  const savedProductsPerPage = 10;
+
+  // Filtered data
+  const filteredProductLabels = useMemo(() => {
+    if (!productSearchTerm.trim()) return productLabels;
+    return productLabels.filter(product => 
+      product.productName.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+      product.label.toLowerCase().includes(productSearchTerm.toLowerCase())
+    );
+  }, [productLabels, productSearchTerm]);
+
+  const filteredDriverInfos = useMemo(() => {
+    if (!driverSearchTerm.trim()) return driverInfos;
+    return driverInfos.filter(driver => 
+      driver.driverName.toLowerCase().includes(driverSearchTerm.toLowerCase()) ||
+      driver.paynowNumber.toLowerCase().includes(driverSearchTerm.toLowerCase()) ||
+      driver.detrackId.toLowerCase().includes(driverSearchTerm.toLowerCase()) ||
+      driver.contactNo.toLowerCase().includes(driverSearchTerm.toLowerCase())
+    );
+  }, [driverInfos, driverSearchTerm]);
+
+  // Filtered and paginated saved products
+  const filteredSavedProducts = useMemo(() => {
+    if (!savedProductsSearchTerm.trim()) return savedProducts;
+    return savedProducts.filter(product => 
+      product.title.toLowerCase().includes(savedProductsSearchTerm.toLowerCase()) ||
+      product.variantTitle?.toLowerCase().includes(savedProductsSearchTerm.toLowerCase()) ||
+      product.tags.some(tag => tag.toLowerCase().includes(savedProductsSearchTerm.toLowerCase())) ||
+      product.orderTags.some(tag => tag.toLowerCase().includes(savedProductsSearchTerm.toLowerCase())) ||
+      product.storeDomain.toLowerCase().includes(savedProductsSearchTerm.toLowerCase())
+    );
+  }, [savedProducts, savedProductsSearchTerm]);
+
+  const paginatedSavedProducts = useMemo(() => {
+    const startIndex = (savedProductsCurrentPage - 1) * savedProductsPerPage;
+    const endIndex = startIndex + savedProductsPerPage;
+    return filteredSavedProducts.slice(startIndex, endIndex);
+  }, [filteredSavedProducts, savedProductsCurrentPage]);
+
+  const totalSavedProductsPages = Math.ceil(filteredSavedProducts.length / savedProductsPerPage);
+
+  // Load stores from database
+  const loadStoresFromDB = async () => {
+    try {
+      const response = await fetch('/api/stores', { credentials: 'include' })
+      if (response.ok) {
+        const storesData = await response.json()
+        const formattedStores = storesData.map((store: any) => ({
+          id: store.id,
+          name: store.store_name,
+          url: store.shopify_domain
+        }))
+        setStores(formattedStores)
+      }
+    } catch (error) {
+      console.error('Error loading stores:', error)
+    }
+  }
+
   // Load data from server on component mount
   useEffect(() => {
     // Clear any existing localStorage data since we've migrated to server-side storage
     clearLocalStorageData();
     loadProductLabels();
     loadDriverInfos();
+    loadStoresFromDB();
+    loadSavedProducts();
   }, []);
+
+  // Load saved products when selected store changes
+  useEffect(() => {
+    if (selectedStore) {
+      loadSavedProducts();
+    }
+  }, [selectedStore]);
+
+  // Reset pagination when search term changes
+  useEffect(() => {
+    setSavedProductsCurrentPage(1);
+  }, [savedProductsSearchTerm]);
+
+  // Pagination navigation functions
+  const goToSavedProductsPage = (page: number) => {
+    setSavedProductsCurrentPage(page);
+  };
+
+  const goToNextSavedProductsPage = () => {
+    if (savedProductsCurrentPage < totalSavedProductsPages) {
+      setSavedProductsCurrentPage(savedProductsCurrentPage + 1);
+    }
+  };
+
+  const goToPreviousSavedProductsPage = () => {
+    if (savedProductsCurrentPage > 1) {
+      setSavedProductsCurrentPage(savedProductsCurrentPage - 1);
+    }
+  };
 
   // Clear localStorage data that was previously used
   const clearLocalStorageData = () => {
@@ -166,25 +276,6 @@ export default function Info() {
       throw error;
     }
   };
-
-  // Filtered data
-  const filteredProductLabels = useMemo(() => {
-    if (!productSearchTerm.trim()) return productLabels;
-    return productLabels.filter(product => 
-      product.productName.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-      product.label.toLowerCase().includes(productSearchTerm.toLowerCase())
-    );
-  }, [productLabels, productSearchTerm]);
-
-  const filteredDriverInfos = useMemo(() => {
-    if (!driverSearchTerm.trim()) return driverInfos;
-    return driverInfos.filter(driver => 
-      driver.driverName.toLowerCase().includes(driverSearchTerm.toLowerCase()) ||
-      driver.paynowNumber.toLowerCase().includes(driverSearchTerm.toLowerCase()) ||
-      driver.detrackId.toLowerCase().includes(driverSearchTerm.toLowerCase()) ||
-      driver.contactNo.toLowerCase().includes(driverSearchTerm.toLowerCase())
-    );
-  }, [driverInfos, driverSearchTerm]);
 
   // Bulk delete functions
   const deleteSelectedProducts = async () => {
@@ -590,6 +681,185 @@ export default function Info() {
     window.URL.revokeObjectURL(url);
   };
 
+  // Load tag filters from server
+  useEffect(() => {
+    if (selectedStore) {
+      loadTagFilters()
+    }
+  }, [selectedStore])
+
+  const loadTagFilters = async () => {
+    try {
+      const response = await fetch(`/api/config/tag-filters?storeId=${selectedStore}`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setTagFilters(data.tagFilters || [])
+      }
+    } catch (error) {
+      console.error('Error loading tag filters:', error)
+    }
+  }
+
+  // Filter products based on search term
+  const filteredProducts = useMemo(() => {
+    if (!productSearchTerm.trim()) {
+      return storeProducts
+    }
+    return storeProducts.filter(product =>
+      product.title.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+      product.variantTitle.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+      product.tags.some(tag => tag.toLowerCase().includes(productSearchTerm.toLowerCase()))
+    )
+  }, [storeProducts, productSearchTerm])
+
+  // Add new tag filter
+  const addTagFilter = async () => {
+    if (!newTagFilter.trim() || !selectedStore) return
+
+    try {
+      const response = await fetch('/api/config/tag-filters', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          tag: newTagFilter.trim(),
+          storeId: selectedStore
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setTagFilters([...tagFilters, data.tagFilter])
+        setNewTagFilter('')
+      }
+    } catch (error) {
+      console.error('Error adding tag filter:', error)
+    }
+  }
+
+  // Remove tag filter
+  const removeTagFilter = async (id: string) => {
+    try {
+      const response = await fetch(`/api/config/tag-filters/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        setTagFilters(tagFilters.filter(filter => filter.id !== id))
+      }
+    } catch (error) {
+      console.error('Error removing tag filter:', error)
+    }
+  }
+
+  // Fetch products based on tags
+  const fetchProducts = async () => {
+    if (!selectedStore) return
+
+    setIsLoadingProducts(true)
+    try {
+      const storeTagFilters = tagFilters.filter(filter => filter.storeId === selectedStore)
+      const response = await fetch('/api/stores/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          storeId: selectedStore,
+          tags: storeTagFilters.map(filter => filter.tag)
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setStoreProducts(data.products)
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error)
+    } finally {
+      setIsLoadingProducts(false)
+    }
+  }
+
+  // Load saved products when store changes
+  const loadSavedProducts = async () => {
+    try {
+      const response = await fetch(`/api/saved-products?storeId=${selectedStore}`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setSavedProducts(data.savedProducts || [])
+        // Create a set of saved product IDs for quick lookup
+        const savedIds = new Set<string>(data.savedProducts?.map((p: SavedProduct) => p.productId) || [])
+        setSavedProductIds(savedIds)
+      }
+    } catch (error) {
+      console.error('Error loading saved products:', error)
+    }
+  }
+
+  // Save product to configuration
+  const saveProduct = async (product: StoreProduct) => {
+    try {
+      const response = await fetch('/api/saved-products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(product)
+      })
+
+      if (response.ok) {
+        // Add to saved products list
+        const savedProduct: SavedProduct = {
+          id: '', // Will be set by the server
+          productId: product.id,
+          title: product.title,
+          variantTitle: product.variantTitle,
+          price: product.price,
+          handle: product.handle,
+          tags: product.tags,
+          orderTags: product.orderTags,
+          storeId: product.storeId,
+          storeDomain: product.storeDomain,
+          userId: '', // Will be set by the server
+          createdAt: new Date().toISOString()
+        }
+        setSavedProducts([savedProduct, ...savedProducts])
+        setSavedProductIds(new Set([...savedProductIds, product.id]))
+      }
+    } catch (error) {
+      console.error('Error saving product:', error)
+    }
+  }
+
+  // Remove product from saved configuration
+  const removeSavedProduct = async (savedProduct: SavedProduct) => {
+    try {
+      const response = await fetch(`/api/saved-products/${savedProduct.id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        setSavedProducts(savedProducts.filter(p => p.id !== savedProduct.id))
+        const newSavedIds = new Set(savedProductIds)
+        newSavedIds.delete(savedProduct.productId)
+        setSavedProductIds(newSavedIds)
+      }
+    } catch (error) {
+      console.error('Error removing saved product:', error)
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -872,6 +1142,365 @@ export default function Info() {
                 )}
               </TableBody>
             </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Store Products Container */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="w-5 h-5" />
+            Store Products
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Fetch and manage products from your Shopify stores based on product tags
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Store Selection and Tag Filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+            <div>
+              <Label className="block text-sm font-medium mb-2">Select Store</Label>
+              <select
+                value={selectedStore}
+                onChange={(e) => setSelectedStore(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+              >
+                <option value="">Choose a store...</option>
+                {stores.map(store => (
+                  <option key={store.id} value={store.id}>{store.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="block text-sm font-medium mb-2">Add Tag Filter</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={newTagFilter}
+                  onChange={(e) => setNewTagFilter(e.target.value)}
+                  placeholder="Enter tag to filter"
+                  onKeyPress={(e) => e.key === 'Enter' && addTagFilter()}
+                />
+                <Button onClick={addTagFilter} disabled={!newTagFilter.trim() || !selectedStore}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-end">
+              <Button 
+                onClick={fetchProducts} 
+                disabled={!selectedStore || tagFilters.filter(f => f.storeId === selectedStore).length === 0}
+                className="w-full"
+              >
+                <Package className="w-4 h-4 mr-2" />
+                Fetch Products
+              </Button>
+            </div>
+          </div>
+
+          {/* Active Tag Filters */}
+          {tagFilters.filter(filter => filter.storeId === selectedStore).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {tagFilters
+                .filter(filter => filter.storeId === selectedStore)
+                .map(filter => (
+                  <Badge key={filter.id} variant="secondary" className="px-3 py-1">
+                    {filter.tag}
+                    <button
+                      onClick={() => removeTagFilter(filter.id)}
+                      className="ml-2 hover:text-red-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))
+              }
+            </div>
+          )}
+
+          {/* Products Search */}
+          {storeProducts.length > 0 && (
+            <div className="flex-1 max-w-md">
+              <Label className="block text-sm font-medium mb-2">Search Products</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search by title or tags..."
+                  value={productSearchTerm}
+                  onChange={(e) => setProductSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Products Table */}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product Details</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Product Tags</TableHead>
+                  <TableHead>Order Tags</TableHead>
+                  <TableHead>Store</TableHead>
+                  <TableHead>Actions</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoadingProducts ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                        <span className="ml-3">Loading products...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="text-center">
+                        <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Found</h3>
+                        <p className="text-gray-600">
+                          {storeProducts.length === 0
+                            ? "Select a store and add tag filters to fetch products"
+                            : "Try adjusting your search terms or tag filters"}
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProducts.map((product) => (
+                    <TableRow key={product.id} className="hover:bg-gray-50">
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-medium">{product.title}</div>
+                          {product.variantTitle && (
+                            <div className="text-sm text-gray-500">{product.variantTitle}</div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-mono">${product.price}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {product.tags.map((tag, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {product.orderTags.map((tag, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>{product.storeDomain}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => savedProductIds.has(product.id) 
+                            ? removeSavedProduct(savedProducts.find(p => p.productId === product.id)!)
+                            : saveProduct(product)
+                          }
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          {savedProductIds.has(product.id) ? (
+                            <BookmarkCheck className="w-4 h-4" />
+                          ) : (
+                            <Bookmark className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                      <TableCell>{new Date(product.updatedAt).toLocaleDateString()}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Saved Products Section */}
+          <div className="mt-8">
+            <Collapsible open={!savedProductsCollapsed} onOpenChange={setSavedProductsCollapsed}>
+              <Card>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <BookmarkCheck className="w-5 h-5" />
+                        <CardTitle>
+                          Saved Products ({savedProducts.length})
+                        </CardTitle>
+                      </div>
+                      {savedProductsCollapsed ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronUp className="w-4 h-4" />
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Your saved products for quick access
+                    </p>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="space-y-6">
+                    {/* Search Bar */}
+                    <div className="flex-1 max-w-md">
+                      <Label className="block text-sm font-medium mb-2">Search Saved Products</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                          placeholder="Search by title, tags, or store..."
+                          value={savedProductsSearchTerm}
+                          onChange={(e) => setSavedProductsSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Products Table */}
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Product Details</TableHead>
+                            <TableHead>Price</TableHead>
+                            <TableHead>Product Tags</TableHead>
+                            <TableHead>Order Tags</TableHead>
+                            <TableHead>Store</TableHead>
+                            <TableHead>Actions</TableHead>
+                            <TableHead>Saved Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedSavedProducts.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center py-8">
+                                {savedProducts.length === 0 ? (
+                                  <div className="text-center">
+                                    <BookmarkCheck className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Saved Products</h3>
+                                    <p className="text-gray-600 mb-4">Save products from the store products above to see them here.</p>
+                                  </div>
+                                ) : (
+                                  <div className="text-center">
+                                    <Search className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Found</h3>
+                                    <p className="text-gray-600">Try adjusting your search terms.</p>
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            paginatedSavedProducts.map((savedProduct) => (
+                              <TableRow key={savedProduct.id} className="hover:bg-gray-50">
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    <div className="font-medium">{savedProduct.title}</div>
+                                    {savedProduct.variantTitle && (
+                                      <div className="text-sm text-gray-500">{savedProduct.variantTitle}</div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="font-mono">${savedProduct.price}</div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {savedProduct.tags.map((tag, index) => (
+                                      <Badge key={index} variant="outline" className="text-xs">
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {savedProduct.orderTags.map((tag, index) => (
+                                      <Badge key={index} variant="secondary" className="text-xs">
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell>{savedProduct.storeDomain}</TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeSavedProduct(savedProduct)}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                                <TableCell>{new Date(savedProduct.createdAt).toLocaleDateString()}</TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Pagination */}
+                    {totalSavedProductsPages > 1 && (
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                          Showing {((savedProductsCurrentPage - 1) * savedProductsPerPage) + 1} to{' '}
+                          {Math.min(savedProductsCurrentPage * savedProductsPerPage, filteredSavedProducts.length)} of{' '}
+                          {filteredSavedProducts.length} products
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={goToPreviousSavedProductsPage}
+                            disabled={savedProductsCurrentPage === 1}
+                          >
+                            Previous
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: totalSavedProductsPages }, (_, i) => i + 1).map((page) => (
+                              <Button
+                                key={page}
+                                variant={savedProductsCurrentPage === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => goToSavedProductsPage(page)}
+                                className="w-8 h-8 p-0"
+                              >
+                                {page}
+                              </Button>
+                            ))}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={goToNextSavedProductsPage}
+                            disabled={savedProductsCurrentPage === totalSavedProductsPages}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           </div>
         </CardContent>
       </Card>

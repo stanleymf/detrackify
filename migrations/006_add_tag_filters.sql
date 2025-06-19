@@ -1,0 +1,10 @@
+-- Create tag_filters table
+CREATE TABLE IF NOT EXISTS tag_filters (
+  id TEXT PRIMARY KEY,
+  tag TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+); 

@@ -697,12 +697,113 @@ export class DatabaseService {
   }
 
   async deleteDriverInfoForUser(userId: string, infoIds: string[]): Promise<void> {
-    if (infoIds.length > 0) {
-      const placeholders = infoIds.map(() => '?').join(',')
-      await this.db.prepare(`
-        DELETE FROM driver_info 
-        WHERE user_id = ? AND id IN (${placeholders})
-      `).bind(userId, ...infoIds).run()
+    if (infoIds.length === 0) return
+    
+    const placeholders = infoIds.map(() => '?').join(',')
+    await this.db.prepare(`
+      DELETE FROM driver_info 
+      WHERE user_id = ? AND id IN (${placeholders})
+    `).bind(userId, ...infoIds).run()
+  }
+
+  // Tag Filter Management
+  async getTagFiltersForUser(userId: string, storeId?: string): Promise<any[]> {
+    let query = 'SELECT * FROM tag_filters WHERE user_id = ?'
+    const params = [userId]
+    
+    if (storeId) {
+      query += ' AND store_id = ?'
+      params.push(storeId)
     }
+    
+    query += ' ORDER BY created_at DESC'
+    
+    const result = await this.db.prepare(query).bind(...params).all<any>()
+    return result.results || []
+  }
+
+  async saveTagFilter(tagFilter: {
+    id: string
+    tag: string
+    storeId: string
+    userId: string
+    createdAt: string
+  }): Promise<void> {
+    await this.db.prepare(`
+      INSERT INTO tag_filters (id, tag, store_id, user_id, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(tagFilter.id, tagFilter.tag, tagFilter.storeId, tagFilter.userId, tagFilter.createdAt).run()
+  }
+
+  async deleteTagFilter(filterId: string, userId: string): Promise<void> {
+    await this.db.prepare(`
+      DELETE FROM tag_filters 
+      WHERE id = ? AND user_id = ?
+    `).bind(filterId, userId).run()
+  }
+
+  // Saved Products Management
+  async getSavedProductsForUser(userId: string, storeId?: string): Promise<any[]> {
+    let query = 'SELECT * FROM saved_products WHERE user_id = ?'
+    const params = [userId]
+    
+    if (storeId) {
+      query += ' AND store_id = ?'
+      params.push(storeId)
+    }
+    
+    query += ' ORDER BY created_at DESC'
+    
+    const result = await this.db.prepare(query).bind(...params).all<any>()
+    return result.results || []
+  }
+
+  async saveProduct(product: {
+    id: string
+    productId: string
+    title: string
+    variantTitle: string
+    price: string
+    handle: string
+    tags: string
+    orderTags: string
+    storeId: string
+    storeDomain: string
+    userId: string
+    createdAt: string
+  }): Promise<void> {
+    await this.db.prepare(`
+      INSERT INTO saved_products (id, product_id, title, variant_title, price, handle, tags, order_tags, store_id, store_domain, user_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      product.id, 
+      product.productId, 
+      product.title, 
+      product.variantTitle, 
+      product.price, 
+      product.handle, 
+      product.tags, 
+      product.orderTags, 
+      product.storeId, 
+      product.storeDomain, 
+      product.userId, 
+      product.createdAt
+    ).run()
+  }
+
+  async deleteSavedProduct(productId: string, userId: string): Promise<void> {
+    await this.db.prepare(`
+      DELETE FROM saved_products 
+      WHERE id = ? AND user_id = ?
+    `).bind(productId, userId).run()
+  }
+
+  async isProductSaved(productId: string, userId: string): Promise<boolean> {
+    const result = await this.db.prepare(`
+      SELECT COUNT(*) as count FROM saved_products 
+      WHERE product_id = ? AND user_id = ?
+    `).bind(productId, userId).first<{count: number}>()
+    
+    return result ? result.count > 0 : false
   }
 } 

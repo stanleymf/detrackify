@@ -30,7 +30,13 @@ import {
 } from "@/types"
 import { storage } from "@/lib/storage"
 
-export function Settings() {
+export function Settings({ 
+  viewMode = 'auto', 
+  onViewModeChange 
+}: { 
+  viewMode?: 'auto' | 'mobile' | 'desktop'
+  onViewModeChange?: (mode: 'auto' | 'mobile' | 'desktop') => void 
+}) {
   const [settings, setSettings] = useState<AppSettings>({ 
     shopifyStores: [], 
     globalFieldMappings: [],

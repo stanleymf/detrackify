@@ -276,6 +276,40 @@ async function handleApiRoutes(
 		return handleDeleteDriverInfo(request, db, authResult.user!.id)
 	}
 
+	if (path === '/api/config/tag-filters' && request.method === 'GET') {
+		return handleGetTagFilters(request, db, authResult.user!.id);
+	}
+
+	if (path === '/api/config/tag-filters' && request.method === 'POST') {
+		return handleSaveTagFilter(request, db, authResult.user!.id);
+	}
+
+	if (path.startsWith('/api/config/tag-filters/') && request.method === 'DELETE') {
+		const filterId = path.split('/').pop();
+		return handleDeleteTagFilter(filterId!, db, authResult.user!.id);
+	}
+
+	if (path === '/api/stores/products' && request.method === 'POST') {
+		return handleFetchStoreProducts(request, db);
+	}
+
+	if (path === '/api/saved-products' && request.method === 'GET') {
+		return handleGetSavedProducts(request, db, authResult.user!.id);
+	}
+
+	if (path === '/api/saved-products' && request.method === 'POST') {
+		return handleSaveProduct(request, db, authResult.user!.id);
+	}
+
+	if (path.startsWith('/api/saved-products/') && request.method === 'DELETE') {
+		const productId = path.split('/').pop();
+		return handleDeleteSavedProduct(productId!, db, authResult.user!.id);
+	}
+
+	if (path === '/api/saved-products/check' && request.method === 'POST') {
+		return handleCheckProductSaved(request, db, authResult.user!.id);
+	}
+
 	return new Response('Not Found', { status: 404 })
 }
 
@@ -2635,5 +2669,267 @@ async function handleDeleteDriverInfo(request: Request, db: DatabaseService, use
 	} catch (error) {
 		console.error('Error deleting driver info:', error)
 		return new Response(JSON.stringify({ error: 'Failed to delete driver info' }), { status: 500 })
+	}
+}
+
+async function handleGetTagFilters(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		console.log('handleGetTagFilters called with userId:', userId);
+		const url = new URL(request.url)
+		const storeId = url.searchParams.get('storeId')
+		console.log('storeId from query params:', storeId);
+		
+		const tagFilters = await db.getTagFiltersForUser(userId, storeId || undefined)
+		console.log('Retrieved tag filters:', tagFilters);
+
+		return new Response(JSON.stringify({ tagFilters }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error getting tag filters:', error);
+		console.error('Error details:', {
+			message: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
+		return new Response(JSON.stringify({ error: 'Failed to get tag filters' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+async function handleSaveTagFilter(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		console.log('handleSaveTagFilter called with userId:', userId);
+		const { tag, storeId } = await request.json();
+		console.log('Request body:', { tag, storeId });
+		
+		// Generate UUID for the tag filter
+		const tagFilterId = globalThis.crypto.randomUUID();
+		console.log('Generated tagFilterId:', tagFilterId);
+		
+		// Save tag filter using DatabaseService
+		await db.saveTagFilter({
+			id: tagFilterId,
+			tag,
+			storeId,
+			userId,
+			createdAt: new Date().toISOString()
+		});
+		console.log('Tag filter saved successfully');
+
+		const tagFilter = {
+			id: tagFilterId,
+			tag,
+			storeId,
+			createdAt: new Date().toISOString()
+		};
+
+		return new Response(JSON.stringify({ tagFilter }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error saving tag filter:', error);
+		console.error('Error details:', {
+			message: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
+		return new Response(JSON.stringify({ error: 'Failed to save tag filter' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+async function handleDeleteTagFilter(filterId: string, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		await db.deleteTagFilter(filterId, userId);
+
+		return new Response(JSON.stringify({ success: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error deleting tag filter:', error);
+		return new Response(JSON.stringify({ error: 'Failed to delete tag filter' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+async function handleFetchStoreProducts(request: Request, db: DatabaseService): Promise<Response> {
+	try {
+		const { storeId, tags } = await request.json();
+		
+		// Get store details using DatabaseService
+		const store = await db.getStoreById(storeId);
+		
+		if (!store) {
+			return new Response(JSON.stringify({ error: 'Store not found' }), {
+				status: 404,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+
+		// Fetch products with variants from Shopify API
+		const response = await fetch(
+			`https://${store.shopify_domain}/admin/api/2024-01/products.json?fields=id,title,handle,tags,variants,created_at,updated_at`, {
+			headers: {
+				'X-Shopify-Access-Token': store.access_token
+			}
+		});
+
+		if (!response.ok) {
+			throw new Error('Failed to fetch products from Shopify');
+		}
+
+		const { products } = await response.json();
+		
+		// Filter products by tags (case-insensitive, trimmed, exact match)
+		const filteredProducts = products.filter((product: any) => {
+			const productTags = product.tags.split(',').map((t: string) => t.trim().toLowerCase());
+			return tags.some((tag: string) => productTags.includes(tag.trim().toLowerCase()));
+		});
+
+		// Transform to our format, including variant information
+		const transformedProducts = filteredProducts.flatMap((product: any) => 
+			product.variants.map((variant: any) => ({
+				id: `${product.id}-${variant.id}`,
+				title: product.title,
+				variantTitle: variant.title !== 'Default Title' ? variant.title : '',
+				price: variant.price,
+				handle: product.handle,
+				tags: product.tags.split(', ').map((t: string) => t.trim()),
+				orderTags: product.tags.split(', ').filter((tag: string) => 
+					tag.toLowerCase().includes('express') || 
+					tag.toLowerCase().includes('stand') ||
+					tag.toLowerCase().includes('priority')
+				),
+				storeId,
+				storeDomain: store.shopify_domain,
+				createdAt: product.created_at,
+				updatedAt: product.updated_at
+			}))
+		);
+
+		return new Response(JSON.stringify({ products: transformedProducts }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error fetching store products:', error);
+		return new Response(JSON.stringify({ error: 'Failed to fetch store products' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+async function handleGetSavedProducts(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		const url = new URL(request.url)
+		const storeId = url.searchParams.get('storeId')
+		
+		const savedProducts = await db.getSavedProductsForUser(userId, storeId || undefined)
+		
+		// Map DB fields to camelCase for frontend
+		const mapped = savedProducts.map((p: any) => ({
+			id: p.id,
+			productId: p.product_id,
+			title: p.title,
+			variantTitle: p.variant_title,
+			price: p.price,
+			handle: p.handle,
+			tags: p.tags ? p.tags.split(', ') : [],
+			orderTags: p.order_tags ? p.order_tags.split(', ') : [],
+			storeId: p.store_id,
+			storeDomain: p.store_domain,
+			createdAt: p.created_at
+		}))
+		
+		return new Response(JSON.stringify({ savedProducts: mapped }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	} catch (error) {
+		console.error('Error getting saved products:', error)
+		return new Response(JSON.stringify({ error: 'Failed to get saved products' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleSaveProduct(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		const productData = await request.json()
+		
+		// Generate UUID for the saved product
+		const savedProductId = globalThis.crypto.randomUUID()
+		
+		// Save product using DatabaseService
+		await db.saveProduct({
+			id: savedProductId,
+			productId: productData.id,
+			title: productData.title,
+			variantTitle: productData.variantTitle || '',
+			price: productData.price,
+			handle: productData.handle,
+			tags: productData.tags.join(', '),
+			orderTags: productData.orderTags.join(', '),
+			storeId: productData.storeId,
+			storeDomain: productData.storeDomain,
+			userId,
+			createdAt: new Date().toISOString()
+		})
+
+		return new Response(JSON.stringify({ success: true, savedProductId }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	} catch (error) {
+		console.error('Error saving product:', error)
+		return new Response(JSON.stringify({ error: 'Failed to save product' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleDeleteSavedProduct(productId: string, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		await db.deleteSavedProduct(productId, userId)
+
+		return new Response(JSON.stringify({ success: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	} catch (error) {
+		console.error('Error deleting saved product:', error)
+		return new Response(JSON.stringify({ error: 'Failed to delete saved product' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleCheckProductSaved(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		const { productId } = await request.json()
+		const isSaved = await db.isProductSaved(productId, userId)
+		
+		return new Response(JSON.stringify({ isSaved }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	} catch (error) {
+		console.error('Error checking product saved status:', error)
+		return new Response(JSON.stringify({ error: 'Failed to check product saved status' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
 	}
 }

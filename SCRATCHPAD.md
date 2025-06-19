@@ -152,6 +152,18 @@ const flowerStandOrders = filteredOrders.filter(order => {
 - ✅ Export to Detrack integration
 - ✅ Responsive design for all screen sizes
 
+## Shopify Product Tags for Line Items (Future Work)
+
+- Shopify product tags are not included directly in the order's line item data.
+- Each line item has a `product_id` field.
+- To get tags, fetch the product using the Shopify Products API: `/admin/api/2024-01/products/{product_id}.json`.
+- The product object will have a `tags` field (comma-separated string).
+- To associate tags with line items:
+  1. For each line item, get its `product_id`.
+  2. Fetch the product and read its `tags`.
+  3. Optionally, cache product tags locally to avoid repeated lookups.
+- Useful for filtering, analytics, or custom logic based on product tags in orders.
+
 ---
 
 *Last updated: January 2024 - v0.6.0* 
