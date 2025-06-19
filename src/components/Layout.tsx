@@ -79,36 +79,7 @@ export function Layout({
             </div>
 
             {/* Bottom Row - Navigation only */}
-            <div className="flex items-center justify-end">
-              <Tabs value={activeTab} onValueChange={onTabChange as (value: string) => void}>
-                <TabsList className={`bg-dust-200 ${isMobile ? 'scale-90' : ''}`}>
-                  <TabsTrigger
-                    value="dashboard"
-                    className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
-                  >
-                    {isMobile ? 'Dash' : 'Dashboard'}
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="analytics"
-                    className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
-                  >
-                    {isMobile ? 'Ana' : 'Analytics'}
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="info"
-                    className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
-                  >
-                    {isMobile ? 'Info' : 'Info'}
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="settings"
-                    className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
-                  >
-                    {isMobile ? 'Set' : 'Settings'}
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+            {/* (Tabs removed from here) */}
           </div>
         </div>
       </header>

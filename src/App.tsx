@@ -6,11 +6,13 @@ import { Login } from "@/components/Login"
 import { initializeMockData } from "@/lib/mockData"
 import Analytics from "@/components/Analytics"
 import Info from "@/components/Info"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 function App() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "settings" | "analytics" | "info">("dashboard")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<'auto' | 'mobile' | 'desktop'>('auto')
 
   useEffect(() => {
     // Check authentication status on app load
@@ -74,11 +76,36 @@ function App() {
   console.log('User authenticated, showing app')
 
   return (
-    <Layout activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout}>
-      {activeTab === "dashboard" && <Dashboard />}
-      {activeTab === "settings" && <Settings />}
-      {activeTab === "analytics" && <Analytics />}
-      {activeTab === "info" && <Info />}
+    <Layout 
+      activeTab={activeTab} 
+      onTabChange={setActiveTab} 
+      onLogout={handleLogout}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+    >
+      {/* Navigation Tabs - right-aligned, above dashboard content */}
+      <div className="flex justify-end mb-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab as (value: string) => void}>
+          <TabsList className="bg-dust-200">
+            <TabsTrigger value="dashboard" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
+              Analytics
+            </TabsTrigger>
+            <TabsTrigger value="info" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
+              Info
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
+              Settings
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+      {activeTab === "dashboard" && <Dashboard viewMode={viewMode} onViewModeChange={setViewMode} />}
+      {activeTab === "settings" && <Settings viewMode={viewMode} onViewModeChange={setViewMode} />}
+      {activeTab === "analytics" && <Analytics viewMode={viewMode} onViewModeChange={setViewMode} />}
+      {activeTab === "info" && <Info viewMode={viewMode} onViewModeChange={setViewMode} />}
     </Layout>
   )
 }
