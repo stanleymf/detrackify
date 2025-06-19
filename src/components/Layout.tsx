@@ -79,7 +79,7 @@ export function Layout({
             </div>
 
             {/* Bottom Row - Navigation only */}
-            <div className="flex items-center">
+            <div className="flex items-center justify-end">
               <Tabs value={activeTab} onValueChange={onTabChange as (value: string) => void}>
                 <TabsList className={`bg-dust-200 ${isMobile ? 'scale-90' : ''}`}>
                   <TabsTrigger
