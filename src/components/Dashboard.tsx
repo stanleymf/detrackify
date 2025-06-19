@@ -691,49 +691,47 @@ export function Dashboard({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold">Orders Dashboard</h2>
-        <div className="flex items-center gap-2">
-          <Button 
-            onClick={handleBulkDelete} 
-            disabled={selectedOrders.size === 0}
-            variant="destructive"
-            className="flex items-center gap-2"
-          >
-            Delete Selected ({selectedOrders.size})
-          </Button>
-          <Button 
-            onClick={handleClearAllOrders} 
-            variant="destructive"
-            className="flex items-center gap-2"
-          >
-            Clear All Orders
-          </Button>
-          <Button 
-            onClick={handleFetchOrders} 
-            disabled={fetchingOrders} 
-            className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white"
-          >
-            <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
-            {fetchingOrders ? "Fetching..." : "Fetch Orders from Shopify"}
-          </Button>
-          <Button 
-            onClick={handleReprocessOrders} 
-            disabled={fetchingOrders} 
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
-            {fetchingOrders ? "Reprocessing..." : "Reprocess Orders"}
-          </Button>
-          <Button 
-            onClick={handleExportToCSV} 
-            disabled={fetchingOrders} 
-            className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white"
-          >
-            <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
-            {fetchingOrders ? "Exporting..." : "Export to CSV"}
-          </Button>
-        </div>
+      <h2 className="text-2xl font-bold">Orders Dashboard</h2>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Button 
+          onClick={handleBulkDelete} 
+          disabled={selectedOrders.size === 0}
+          variant="destructive"
+          className="flex items-center gap-2"
+        >
+          Delete Selected ({selectedOrders.size})
+        </Button>
+        <Button 
+          onClick={handleClearAllOrders} 
+          variant="destructive"
+          className="flex items-center gap-2"
+        >
+          Clear All Orders
+        </Button>
+        <Button 
+          onClick={handleFetchOrders} 
+          disabled={fetchingOrders} 
+          className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white"
+        >
+          <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
+          {fetchingOrders ? "Fetching..." : "Fetch Orders from Shopify"}
+        </Button>
+        <Button 
+          onClick={handleReprocessOrders} 
+          disabled={fetchingOrders} 
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
+          {fetchingOrders ? "Reprocessing..." : "Reprocess Orders"}
+        </Button>
+        <Button 
+          onClick={handleExportToCSV} 
+          disabled={fetchingOrders} 
+          className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white"
+        >
+          <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
+          {fetchingOrders ? "Exporting..." : "Export to CSV"}
+        </Button>
       </div>
       {fetchResult && (
         <div className="mb-4 p-3 bg-muted/50 border rounded text-sm whitespace-pre-wrap">
@@ -836,28 +834,6 @@ export function Dashboard({
           )}
         </CardContent>
       </Card>
-
-      {/* Action Buttons */}
-      <div className={`w-full flex flex-wrap gap-2 ${isMobile ? 'px-4 pb-4' : ''}`}>
-        <div className={`flex gap-2 ${isMobile ? 'w-full' : ''}`}>
-          <Button
-            onClick={handleBulkDelete}
-            disabled={selectedOrders.size === 0}
-            variant="destructive"
-            className="flex-1"
-          >
-            Delete Selected ({selectedOrders.size})
-          </Button>
-          <Button
-            onClick={handleClearAllOrders}
-            disabled={filteredOrders.length === 0}
-            variant="destructive"
-            className="flex-1"
-          >
-            Clear All Orders
-          </Button>
-        </div>
-      </div>
 
       {/* Orders Dashboard Card */}
       <Card>
