@@ -1,3 +1,5 @@
+console.log('=== Detrackify Worker Version: 20240619-UNIQUE ===');
+console.log('🚨 THIS IS THE LATEST VERSION - IF YOU SEE THIS, NEW CODE IS RUNNING 🚨');
 import { DatabaseService } from '../src/lib/database'
 import { CloudflareAuthService, requireAuth, getSessionTokenFromRequest, setSessionCookie, clearSessionCookie } from '../src/lib/auth'
 import { processShopifyOrder } from '../src/lib/orderProcessor'
@@ -302,8 +304,16 @@ async function handleApiRoutes(
 		return handleDeleteTitleFilter(filterId!, db, authResult.user!.id);
 	}
 
+	if (path === '/api/stores/products2' && request.method === 'POST') {
+		console.log('[ROUTE] === TEST ROUTE PRODUCTS2 CALLED ===');
+		console.log('🚨 TEST ROUTE WORKING - NEW CODE IS DEPLOYED 🚨');
+		return new Response(JSON.stringify({ test: true, version: '20240619-UNIQUE', message: 'NEW CODE IS RUNNING' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+	}
+
 	if (path === '/api/stores/products' && request.method === 'POST') {
-		return handleFetchStoreProducts(request, db);
+		console.log('[ROUTE] === NEW ROUTE HANDLER CALLED ===');
+		console.log('[ROUTE] Calling handleFetchStoreProductsByTag');
+		return handleFetchStoreProductsByTag(request, db, authResult.user!.id);
 	}
 
 	if (path === '/api/saved-products' && request.method === 'GET') {
@@ -333,11 +343,6 @@ async function handleApiRoutes(
 
 	if (path === '/api/saved-products/bulk-save' && request.method === 'POST') {
 		return handleBulkSaveProducts(request, db, authResult.user!.id);
-	}
-
-	// Add after other API routes
-	if (path === '/api/stores/products' && request.method === 'POST') {
-		return handleFetchStoreProductsByTag(request, db, authResult.user!.id);
 	}
 
 	return new Response('Not Found', { status: 404 })
@@ -2794,9 +2799,10 @@ async function handleFetchStoreProducts(request: Request, db: DatabaseService): 
 	try {
 		const { storeId, tags, titles } = await request.json();
 		
-		// Get store details using DatabaseService
-		const store = await db.getStoreById(storeId);
+		// Debug logging
+		console.log('[FetchProducts] Request received:', { storeId, tags, titles });
 		
+		const store = await db.getStoreById(storeId);
 		if (!store) {
 			return new Response(JSON.stringify({ error: 'Store not found' }), {
 				status: 404,
@@ -2804,24 +2810,68 @@ async function handleFetchStoreProducts(request: Request, db: DatabaseService): 
 			});
 		}
 
-		// Fetch products with variants from Shopify API
-		const response = await fetch(
-			`https://${store.shopify_domain}/admin/api/2024-01/products.json?fields=id,title,handle,tags,variants,created_at,updated_at`, {
-			headers: {
-				'X-Shopify-Access-Token': store.access_token
-			}
+		console.log('[FetchProducts] Store found:', { 
+			id: store.id, 
+			domain: store.shopify_domain,
+			hasAccessToken: !!store.access_token 
 		});
 
-		if (!response.ok) {
-			throw new Error('Failed to fetch products from Shopify');
+		// Fetch all products using pagination
+		let allProducts: any[] = [];
+		let pageInfo: string | null = null;
+		let pageCount = 0;
+		
+		do {
+			pageCount++;
+			console.log(`[FetchProducts] Fetching page ${pageCount}...`);
+			
+			// Build URL with pagination parameters
+			let url = `https://${store.shopify_domain}/admin/api/2024-01/products.json?limit=250`;
+			if (pageInfo) {
+				url += `&page_info=${pageInfo}`;
+			}
+			
+			const response = await fetch(url, {
+				headers: {
+					'X-Shopify-Access-Token': store.access_token
+				}
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch products from Shopify: ${response.status} ${response.statusText}`);
+			}
+
+			const { products } = await response.json();
+			allProducts = allProducts.concat(products);
+			
+			console.log(`[FetchProducts] Page ${pageCount} - fetched ${products.length} products, total so far: ${allProducts.length}`);
+			
+			// Check for next page
+			const linkHeader = response.headers.get('Link');
+			if (linkHeader && linkHeader.includes('rel="next"')) {
+				// Extract page_info from Link header
+				const nextMatch = linkHeader.match(/<[^>]*page_info=([^&>]+)[^>]*>;\s*rel="next"/);
+				pageInfo = nextMatch ? nextMatch[1] : null;
+			} else {
+				pageInfo = null;
+			}
+			
+		} while (pageInfo);
+		
+		console.log('[FetchProducts] Completed fetching all products - total count:', allProducts.length);
+		if (allProducts.length > 0) {
+			console.log('[FetchProducts] Sample product tags:', allProducts.slice(0, 3).map(p => ({
+				title: p.title,
+				tags: p.tags,
+				tagsType: typeof p.tags
+			})));
 		}
 
-		const { products } = await response.json();
-		
 		// Filter products by tags and/or titles
-		const filteredProducts = products.filter((product: any) => {
-			// If no filters provided, return all products
+		const filteredProducts = allProducts.filter((product: any) => {
+			// If no filters provided, return all products (for debugging)
 			if ((!tags || tags.length === 0) && (!titles || titles.length === 0)) {
+				console.log(`[Debug] Showing all products - Product: ${product.title}, Tags: "${product.tags}"`);
 				return true;
 			}
 			
@@ -2859,11 +2909,11 @@ async function handleFetchStoreProducts(request: Request, db: DatabaseService): 
 				variantTitle: variant.title !== 'Default Title' ? variant.title : '',
 				price: variant.price,
 				handle: product.handle,
-				tags: product.tags.split(', ').map((t: string) => t.trim()),
-				orderTags: product.tags.split(', ').filter((tag: string) => 
-					tag.toLowerCase().includes('express') || 
-					tag.toLowerCase().includes('stand') ||
-					tag.toLowerCase().includes('priority')
+				tags: product.tags.split(',').map((t: string) => t.trim()),
+				orderTags: product.tags.split(',').filter((tag: string) => 
+					tag.trim().toLowerCase().includes('express') || 
+					tag.trim().toLowerCase().includes('stand') ||
+					tag.trim().toLowerCase().includes('priority')
 				),
 				storeId,
 				storeDomain: store.shopify_domain,
@@ -3208,47 +3258,149 @@ async function handleSyncProducts(request: Request, db: DatabaseService, userId:
 
 // Handler: Fetch products from Shopify by tag filter (no DB write)
 async function handleFetchStoreProductsByTag(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	console.log('[FetchProductsByTag] === NEW FUNCTION CALLED ===');
+	console.log('[FetchProductsByTag] This is the NEW function with pagination');
+	
 	try {
-		const { storeId, tags } = await request.json();
+		const { storeId, tags, titles } = await request.json();
+		
+		// Debug logging
+		console.log('[FetchProductsByTag] Request received:', { storeId, tags, titles });
+		
 		if (!storeId) {
 			return new Response(JSON.stringify({ error: 'Store ID is required' }), { status: 400 });
 		}
+		
 		const store = await db.getStoreById(storeId);
 		if (!store) {
 			return new Response(JSON.stringify({ error: 'Store not found' }), { status: 404 });
 		}
-		// Fetch products from Shopify
-		const url = `https://${store.shopify_domain}/admin/api/${store.api_version}/products.json?limit=250`;
-		const response = await fetch(url, {
-			headers: {
-				'X-Shopify-Access-Token': store.access_token,
-				'Content-Type': 'application/json',
-			},
+
+		console.log('[FetchProductsByTag] Store found:', { 
+			id: store.id, 
+			domain: store.shopify_domain,
+			hasAccessToken: !!store.access_token 
 		});
-		if (!response.ok) {
-			const errorText = await response.text();
-			return new Response(JSON.stringify({ error: 'Failed to fetch products', details: errorText }), { status: 500 });
-		}
-		const data = await response.json();
-		let products = data.products || [];
-		// Enhanced tag filtering
-		if (tags && tags.length > 0) {
-			const inputTags = tags.map((t: string) => t.trim().toLowerCase()).filter(Boolean);
-			products = products.filter((product: any) => {
-				const productTags = product.tags.split(',').map((t: string) => t.trim().toLowerCase());
-				// Debug log
-				console.log(`[TagFilter] Product: ${product.title}, ProductTags:`, productTags, 'InputTags:', inputTags);
-				// Match if any input tag is a substring of any product tag
-				return inputTags.some(inputTag =>
-					productTags.some(productTag => productTag.includes(inputTag))
-				);
+
+		// Fetch all products using pagination
+		let allProducts: any[] = [];
+		let pageInfo: string | null = null;
+		let pageCount = 0;
+		const limit = 250; // Maximum allowed by Shopify
+
+		do {
+			pageCount++;
+			console.log(`[FetchProductsByTag] Fetching page ${pageCount}...`);
+			
+			const url = new URL(`https://${store.shopify_domain}/admin/api/2023-10/products.json`);
+			url.searchParams.set('limit', limit.toString());
+			if (pageInfo) {
+				url.searchParams.set('page_info', pageInfo);
+			}
+
+			const response = await fetch(url.toString(), {
+				headers: {
+					'X-Shopify-Access-Token': store.access_token,
+					'Content-Type': 'application/json'
+				}
+			});
+
+			if (!response.ok) {
+				console.error(`[FetchProductsByTag] Shopify API error: ${response.status} ${response.statusText}`);
+				return new Response(JSON.stringify({ error: `Shopify API error: ${response.status}` }), { status: response.status });
+			}
+
+			const data = await response.json();
+			const products = data.products || [];
+			
+			console.log(`[FetchProductsByTag] Page ${pageCount} - fetched ${products.length} products, total so far: ${allProducts.length + products.length}`);
+			
+			allProducts.push(...products);
+
+			// Get next page info from Link header
+			const linkHeader = response.headers.get('Link');
+			if (linkHeader && linkHeader.includes('rel="next"')) {
+				const match = linkHeader.match(/<[^>]*page_info=([^&>]+)[^>]*>;\s*rel="next"/);
+				pageInfo = match ? match[1] : null;
+			} else {
+				pageInfo = null;
+			}
+
+		} while (pageInfo);
+
+		console.log(`[FetchProductsByTag] Completed fetching all products - total count: ${allProducts.length}`);
+
+		// Process and filter products
+		const processedProducts = allProducts.map(product => {
+			const tags = product.tags ? product.tags.split(',').map((tag: string) => tag.trim()) : [];
+			const variants = product.variants || [];
+			const firstVariant = variants[0] || {};
+			
+			return {
+				id: product.id.toString(),
+				title: product.title,
+				handle: product.handle,
+				tags: tags,
+				price: firstVariant.price || '0',
+				variantTitle: firstVariant.title || '',
+				variants: variants.map((v: any) => ({
+					id: v.id.toString(),
+					title: v.title || '',
+					price: v.price || '0',
+					sku: v.sku || ''
+				}))
+			};
+		});
+
+		// Apply filters if provided
+		let filteredProducts = processedProducts;
+		
+		if (tags.length > 0 || titles.length > 0) {
+			filteredProducts = processedProducts.filter(product => {
+				// Tag filtering
+				if (tags.length > 0) {
+					const productTags = product.tags.map((tag: string) => tag.toLowerCase());
+					const hasMatchingTag = tags.some(filterTag => 
+						productTags.some(productTag => productTag.includes(filterTag.toLowerCase()))
+					);
+					if (!hasMatchingTag) return false;
+				}
+				
+				// Title filtering
+				if (titles.length > 0) {
+					const productTitle = product.title.toLowerCase();
+					const hasMatchingTitle = titles.some(filterTitle => 
+						productTitle.includes(filterTitle.toLowerCase())
+					);
+					if (!hasMatchingTitle) return false;
+				}
+				
+				return true;
 			});
 		}
-		// Return filtered products
-		return new Response(JSON.stringify({ products }), { status: 200 });
+
+		console.log(`[FetchProductsByTag] Filtered products: ${filteredProducts.length} of ${processedProducts.length} total`);
+
+		// Debug: Show sample products
+		if (filteredProducts.length > 0) {
+			console.log('[FetchProductsByTag] Sample filtered products:');
+			filteredProducts.slice(0, 3).forEach(product => {
+				console.log(`[FetchProductsByTag] - ${product.title}: ${product.tags.join(', ')}`);
+			});
+		}
+
+		return new Response(JSON.stringify({ 
+			products: filteredProducts,
+			total: filteredProducts.length,
+			totalFetched: allProducts.length
+		}), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+
 	} catch (error) {
-		console.error('[handleFetchStoreProductsByTag] Error:', error);
-		return new Response(JSON.stringify({ error: 'Failed to fetch products' }), { status: 500 });
+		console.error('[FetchProductsByTag] Error:', error);
+		return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 });
 	}
 }
 

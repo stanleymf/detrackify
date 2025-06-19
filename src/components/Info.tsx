@@ -154,6 +154,7 @@ export default function Info({
 
   // Add state for tag filter, fetched products, and selected fetched products
   const [tagFilter, setTagFilter] = useState('');
+  const [titleFilter, setTitleFilter] = useState('');
   const [fetchedProducts, setFetchedProducts] = useState<any[]>([]);
   const [selectedFetched, setSelectedFetched] = useState<Set<string>>(new Set());
 
@@ -1019,23 +1020,65 @@ export default function Info({
 
   // Fetch products by tag
   const fetchProductsByTag = async () => {
-    if (!selectedStore || !tagFilter.trim()) return;
+    console.log('[Frontend] fetchProductsByTag called');
+    console.log('[Frontend] Current state:', { selectedStore, tagFilter, titleFilter, fetching });
+    
+    if (!selectedStore) {
+      console.log('[Frontend] No store selected, returning');
+      return;
+    }
+    
+    if (fetching) {
+      console.log('[Frontend] Already fetching, returning');
+      return;
+    }
+    
+    console.log('[Frontend] Starting fetch process');
     setFetchedProducts([]);
     setSelectedFetched(new Set());
     setFetching(true);
+    
     try {
+      const requestBody = { 
+        storeId: selectedStore, 
+        tags: tagFilter.split(',').map(t => t.trim()).filter(Boolean),
+        titles: titleFilter.split(',').map(t => t.trim()).filter(Boolean)
+      };
+      
+      console.log('[Frontend] Fetching products with:', requestBody);
+      console.log('[Frontend] Making request to /api/stores/products');
+      
       const res = await fetch('/api/stores/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ storeId: selectedStore, tags: tagFilter.split(',').map(t => t.trim()).filter(Boolean) })
+        body: JSON.stringify(requestBody)
       });
+      
+      console.log('[Frontend] Response received:', res.status, res.statusText);
+      console.log('[Frontend] Response headers:', Object.fromEntries(res.headers.entries()));
+      
       if (res.ok) {
         const data = await res.json();
+        console.log('[Frontend] Response data:', data);
         setFetchedProducts(data.products || []);
+        console.log('[Frontend] Set fetched products:', data.products?.length || 0);
+      } else {
+        const errorText = await res.text();
+        console.error('[Frontend] Error response:', errorText);
+        alert(`Failed to fetch products: ${res.status} ${res.statusText}`);
       }
-    } catch {}
-    setFetching(false);
+    } catch (error) {
+      console.error('[Frontend] Fetch error:', error);
+      console.error('[Frontend] Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      console.log('[Frontend] Setting fetching to false');
+      setFetching(false);
+    }
   };
 
   // Save selected fetched products
@@ -1044,8 +1087,8 @@ export default function Info({
     const toSave = fetchedProducts.filter(p => selectedFetched.has(p.id)).map(p => ({
       id: p.id,
       title: p.title,
-      variantTitle: p.variants?.[0]?.title || '',
-      price: p.variants?.[0]?.price || '0',
+      variantTitle: p.variantTitle || '',
+      price: p.price || '0',
       handle: p.handle,
       tags: p.tags,
       storeId: selectedStore,
@@ -1088,7 +1131,7 @@ export default function Info({
     const seen = new Set();
     return fetchedProducts
       .filter(p => {
-        const key = p.id || (p.title + (p.variants?.[0]?.title || ''));
+        const key = p.id || (p.title + (p.variantTitle || ''));
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -1097,26 +1140,32 @@ export default function Info({
         const tA = a.title.toLowerCase();
         const tB = b.title.toLowerCase();
         if (tA !== tB) return tA.localeCompare(tB);
-        const vA = (a.variants?.[0]?.title || '').toLowerCase();
-        const vB = (b.variants?.[0]?.title || '').toLowerCase();
+        const vA = (a.variantTitle || '').toLowerCase();
+        const vB = (b.variantTitle || '').toLowerCase();
         return vA.localeCompare(vB);
       });
   }, [fetchedProducts]);
-  const totalFetchedPages = Math.ceil(sortedFetchedProducts.length / fetchedProductsPerPage);
-  const paginatedFetchedProducts = useMemo(() => {
-    const start = (fetchedProductsPage - 1) * fetchedProductsPerPage;
-    return sortedFetchedProducts.slice(start, start + fetchedProductsPerPage);
-  }, [sortedFetchedProducts, fetchedProductsPage]);
 
   // Filter fetched products based on search term
   const filteredFetchedProducts = useMemo(() => {
     if (!fetchedProductsSearchTerm.trim()) return sortedFetchedProducts;
     return sortedFetchedProducts.filter(product => 
       product.title.toLowerCase().includes(fetchedProductsSearchTerm.toLowerCase()) ||
-      product.variants?.[0]?.title?.toLowerCase().includes(fetchedProductsSearchTerm.toLowerCase()) ||
+      product.variantTitle?.toLowerCase().includes(fetchedProductsSearchTerm.toLowerCase()) ||
       product.tags.some((tag: string) => tag.toLowerCase().includes(fetchedProductsSearchTerm.toLowerCase()))
     );
   }, [sortedFetchedProducts, fetchedProductsSearchTerm]);
+
+  const totalFetchedPages = Math.ceil(filteredFetchedProducts.length / fetchedProductsPerPage);
+  const paginatedFetchedProducts = useMemo(() => {
+    const start = (fetchedProductsPage - 1) * fetchedProductsPerPage;
+    return filteredFetchedProducts.slice(start, start + fetchedProductsPerPage);
+  }, [filteredFetchedProducts, fetchedProductsPage]);
+
+  // Reset page to 1 when search term changes
+  useEffect(() => {
+    setFetchedProductsPage(1);
+  }, [fetchedProductsSearchTerm]);
 
   return (
     <div className="space-y-8">
@@ -1221,8 +1270,9 @@ export default function Info({
                   />
                   <Button 
                     onClick={fetchProductsByTag} 
-                    disabled={!selectedStore || !tagFilter.trim() || fetching}
+                    disabled={!selectedStore || fetching}
                     className="min-w-[100px]"
+                    title={`Debug: selectedStore=${selectedStore}, tagFilter="${tagFilter}", titleFilter="${titleFilter}", fetching=${fetching}`}
                   >
                     {fetching ? (
                       <>
@@ -1237,9 +1287,26 @@ export default function Info({
                     )}
                   </Button>
                 </div>
+                <div className="flex gap-2">
+                  <Input 
+                    id="title-filter" 
+                    value={titleFilter} 
+                    onChange={e => setTitleFilter(e.target.value)} 
+                    placeholder="Search by product title (e.g., Heartfelt)" 
+                    className="flex-1" 
+                  />
+                </div>
                 <p className="text-xs text-gray-500">
-                  Enter tags separated by commas to filter products from your store
+                  Enter tags separated by commas OR product title to filter products. Leave both empty to fetch all products.
                 </p>
+                {/* Debug display */}
+                <div className="text-xs text-gray-400 bg-gray-50 p-2 rounded">
+                  <div>Debug: selectedStore="{selectedStore}"</div>
+                  <div>tagFilter="{tagFilter}"</div>
+                  <div>titleFilter="{titleFilter}"</div>
+                  <div>fetching={fetching.toString()}</div>
+                  <div>Button disabled: {(!selectedStore || fetching).toString()}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -1254,13 +1321,13 @@ export default function Info({
                   Fetched Products
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  {sortedFetchedProducts.length > 0 
-                    ? `${sortedFetchedProducts.length} products found matching your filter`
+                  {filteredFetchedProducts.length > 0 
+                    ? `${filteredFetchedProducts.length} products found matching your filter`
                     : 'No products fetched yet'
                   }
                 </p>
               </div>
-              {sortedFetchedProducts.length > 0 && (
+              {filteredFetchedProducts.length > 0 && (
                 <div className="flex items-center gap-3">
                   <div className="text-sm text-gray-600">
                     <span className="font-medium">{selectedFetched.size}</span> selected
@@ -1279,7 +1346,7 @@ export default function Info({
             </div>
 
             {/* Search Bar */}
-            {sortedFetchedProducts.length > 0 && (
+            {filteredFetchedProducts.length > 0 && (
               <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -1369,7 +1436,7 @@ export default function Info({
                       </TableCell>
                       <TableCell className="align-top px-4 py-3 text-right">
                         <div className="font-medium text-gray-900">
-                          ${Number(product.variants?.[0]?.price || 0).toFixed(2)}
+                          ${Number(product.price || 0).toFixed(2)}
                         </div>
                       </TableCell>
                     </TableRow>

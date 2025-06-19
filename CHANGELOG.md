@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2024-12-19
+
+### Added
+- **Enhanced Product Search** - Search bar now searches through product titles, variant titles, and tags for comprehensive filtering
+- **Real-time Search Filtering** - Search results update instantly as you type for better user experience
+- **Automatic Page Reset** - Search automatically resets to page 1 when search term changes to prevent empty pages
+- **Improved Product Pagination** - Fixed pagination to work correctly with search filtering
+
+### Changed
+- **Search Algorithm** - Enhanced search to use substring matching across multiple product fields
+- **Pagination Logic** - Updated pagination to use filtered results instead of all products
+- **Product Count Display** - Now shows filtered count vs total count for better user feedback
+- **Search Performance** - Optimized search filtering with proper memoization and dependency management
+
+### Fixed
+- **Search Bar Not Working** - Fixed issue where search bar wouldn't filter products properly
+- **Pagination with Search** - Resolved pagination showing wrong products when search was active
+- **Product Count Accuracy** - Fixed display to show correct filtered product counts
+- **Search Across Tags** - Now properly searches through product tags in addition to titles
+- **Page Navigation** - Fixed pagination to work correctly with search results
+
+### Technical Improvements
+- **Filtered Product Logic** - Implemented proper filtered product handling with useMemo optimization
+- **Search State Management** - Added useEffect to reset page when search term changes
+- **Component Architecture** - Improved search and pagination component structure
+- **Performance Optimization** - Enhanced memoization for better search performance
+
 ## [0.9.0] - 2024-12-19
 
 ### Added
