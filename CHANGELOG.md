@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.8.0] - 2024-06-19
 
 ### Added
 - **Multi-Store Order Fetching** - Fetch orders now processes all configured stores automatically instead of requiring individual store selection
@@ -64,6 +64,8 @@ All notable changes to this project will be documented in this file.
 - Contact Detrack support to request write permissions for API key
 - Test export functionality with real dashboard order data
 - Implement export UI in dashboard for when permissions are granted
+
+## [Unreleased]
 
 ## [0.7.0] - 2024-01-XX
 
