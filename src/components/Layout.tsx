@@ -34,43 +34,52 @@ export function Layout({
             {/* Top Row - Logo and View Mode */}
             <div className="flex items-center justify-between">
               <h1 className={`font-bold text-olive-600 ${isMobile ? 'text-xl' : 'text-2xl'}`}>Detrackify</h1>
-              
-              {/* View Mode Toggles */}
-              {onViewModeChange && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant={viewMode === 'auto' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => onViewModeChange('auto')}
-                    className="text-xs px-2"
-                    title="Auto (responsive)"
-                  >
-                    Auto
-                  </Button>
-                  <Button
-                    variant={viewMode === 'mobile' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => onViewModeChange('mobile')}
-                    className="text-xs px-2"
-                    title="Mobile card view"
-                  >
-                    <Smartphone className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant={viewMode === 'desktop' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => onViewModeChange('desktop')}
-                    className="text-xs px-2"
-                    title="Desktop table view"
-                  >
-                    <Monitor className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {/* View Mode Toggles */}
+                {onViewModeChange && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant={viewMode === 'auto' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => onViewModeChange('auto')}
+                      className="text-xs px-2"
+                      title="Auto (responsive)"
+                    >
+                      Auto
+                    </Button>
+                    <Button
+                      variant={viewMode === 'mobile' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => onViewModeChange('mobile')}
+                      className="text-xs px-2"
+                      title="Mobile card view"
+                    >
+                      <Smartphone className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant={viewMode === 'desktop' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => onViewModeChange('desktop')}
+                      className="text-xs px-2"
+                      title="Desktop table view"
+                    >
+                      <Monitor className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+                {/* Logout Button */}
+                <Button 
+                  variant="outline" 
+                  onClick={onLogout}
+                  className={`text-gray-600 hover:text-gray-800 text-xs px-2 py-1`}
+                >
+                  {isMobile ? 'Out' : 'Logout'}
+                </Button>
+              </div>
             </div>
 
-            {/* Bottom Row - Navigation and Logout */}
-            <div className="flex items-center justify-between">
+            {/* Bottom Row - Navigation only */}
+            <div className="flex items-center">
               <Tabs value={activeTab} onValueChange={onTabChange as (value: string) => void}>
                 <TabsList className={`bg-dust-200 ${isMobile ? 'scale-90' : ''}`}>
                   <TabsTrigger
@@ -83,30 +92,22 @@ export function Layout({
                     value="analytics"
                     className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
                   >
-                    Ana
+                    {isMobile ? 'Ana' : 'Analytics'}
                   </TabsTrigger>
                   <TabsTrigger
                     value="info"
                     className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
                   >
-                    Info
+                    {isMobile ? 'Info' : 'Info'}
                   </TabsTrigger>
                   <TabsTrigger
                     value="settings"
                     className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
                   >
-                    Set
+                    {isMobile ? 'Set' : 'Settings'}
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-
-              <Button 
-                variant="outline" 
-                onClick={onLogout}
-                className={`text-gray-600 hover:text-gray-800 text-xs px-2 py-1`}
-              >
-                {isMobile ? 'Out' : 'Logout'}
-              </Button>
             </div>
           </div>
         </div>
