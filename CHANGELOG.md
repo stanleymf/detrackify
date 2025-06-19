@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - **Map dashboard field 'Last Name' to Detrack's 'last_name' payload field**
 - **Removed unsupported or misnamed fields from Detrack payload**
 - **Confirmed successful end-to-end export and field mapping with Detrack API**
+- **Improved Mobile Layout** - Enhanced header layout for better mobile responsiveness with stacked navigation and view mode controls
 
 ### Changed
 - **Dashboard Default Limit** - Increased from 50 to 200 orders per page across all database queries and frontend display
@@ -30,6 +31,8 @@ All notable changes to this project will be documented in this file.
 - **Detrack Test Endpoint** - Fixed main test endpoint to use correct v2 API format instead of v1
 - **API Payload Structure** - Standardized on v2 API format with proper data wrapping structure
 - **Error Handling** - Enhanced error reporting for API permission and configuration issues
+- **Mobile Navigation** - Reorganized header layout to use a two-row design for better mobile visibility
+- **View Mode Controls** - Simplified view mode buttons on mobile to use icons only for better space efficiency
 
 ### Fixed
 - **Order Refresh After Fetch** - Fixed issue where orders wouldn't appear after fetching until manual page refresh
@@ -40,6 +43,7 @@ All notable changes to this project will be documented in this file.
 - **Payload Format** - Fixed payload structure to match successful GET response format
 - **Test Endpoint Routing** - Corrected main test endpoint to use proper v2 implementation
 - **Detrack Jobs API Endpoint** - Updated Analytics page to use correct Detrack API endpoint format (`type=DeliveryParameters` instead of `type=Delivery&date=`)
+- **Mobile Layout** - Fixed issue where view mode buttons were being cut off on mobile devices
 
 ### Technical Improvements
 - **Database Service Updates** - Updated all order retrieval methods to use 200 as default limit
@@ -87,21 +91,24 @@ All notable changes to this project will be documented in this file.
 ## [0.6.0] - 2024-01-XX
 
 ### Added
+- **Flower Stands Stat Card** - New Dashboard stat card that filters orders based on Product Labels with "Stand" label
+- **Product Labels Integration** - Flower Stands card automatically maps order descriptions to Product Labels from Info page
+- **Smart Order Filtering** - Identifies orders containing products labeled as "Stand" for specialized tracking
 - **Express Orders Address Display** - Enhanced Express stat card in Dashboard to show delivery addresses alongside order numbers and line items
 - **Address Field Integration** - Express orders now display complete delivery information including addresses with location pin emoji (📍)
 - **Improved Express Order Visibility** - Better identification and management of Express deliveries with full address context
 
 ### Changed
+- **Flower Stands Data Processing** - Real-time filtering of orders based on Product Labels configuration
 - **Express Stat Card Layout** - Updated Express orders display to include address field for better delivery management
-- **Express Order Data Structure** - Enhanced data collection to capture and display address information for Express orders
-- **Express Card Styling** - Added address display with truncation and hover tooltips for better UX
+- **Express Order Data Structure** - Enhanced data collection to capture and display delivery addresses
+- **Dashboard Stat Cards** - Added new Flower Stands section with responsive grid layout matching Express orders design
 
 ### Fixed
-- **Case-Insensitive Driver Matching** - Fixed Part-Time Pay section in Analytics to match driver names case-insensitively (e.g., "Praga" now matches "praga")
-- **Product Labels Field Mapping** - Fixed Product Labels section in Info page to properly map database snake_case fields to frontend camelCase
-- **Product Labels Data Persistence** - Resolved issue where product names would disappear on page refresh due to field mapping mismatch
-- **Driver Name Matching Logic** - Updated Analytics Part-Time Pay to use case-insensitive comparison for better driver order matching
-- **Database Field Mapping** - Added proper field mapping for product labels API to handle snake_case to camelCase conversion
+- **Case-Insensitive Driver Matching** - Fixed driver name matching in Analytics Part-Time Pay to work regardless of case sensitivity
+- **Product Labels Field Mapping** - Resolved field mapping issue causing product labels to disappear on page refresh
+- **Driver Order Assignment** - Improved accuracy of driver order matching and pay calculations
+- **Product Labels Data Persistence** - Fixed database field mapping from snake_case to camelCase for frontend compatibility
 
 ## [0.5.1] - 2024-01-XX
 
