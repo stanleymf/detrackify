@@ -189,6 +189,14 @@ async function handleApiRoutes(
 		})
 	}
 
+	if (path === '/api/detrack/job-types' && request.method === 'GET') {
+		return await handleGetDetrackJobTypes(db)
+	}
+
+	if (path === '/api/detrack/jobs' && request.method === 'GET') {
+		return await handleGetDetrackJobs(request, db)
+	}
+
 	if (path === '/api/stores' && request.method === 'GET') {
 		return handleGetStores(db)
 	}
@@ -241,6 +249,31 @@ async function handleApiRoutes(
 	if (path.startsWith('/api/stores/') && path.endsWith('/register-webhook') && request.method === 'POST') {
 		const storeId = path.split('/')[3];
 		return handleRegisterShopifyWebhook(storeId, db);
+	}
+
+	// Configuration data endpoints (Product Labels and Driver Info)
+	if (path === '/api/config/product-labels' && request.method === 'GET') {
+		return handleGetProductLabels(request, db, authResult.user!.id)
+	}
+
+	if (path === '/api/config/product-labels' && request.method === 'POST') {
+		return handleSaveProductLabels(request, db, authResult.user!.id)
+	}
+
+	if (path === '/api/config/product-labels' && request.method === 'DELETE') {
+		return handleDeleteProductLabels(request, db, authResult.user!.id)
+	}
+
+	if (path === '/api/config/driver-info' && request.method === 'GET') {
+		return handleGetDriverInfo(request, db, authResult.user!.id)
+	}
+
+	if (path === '/api/config/driver-info' && request.method === 'POST') {
+		return handleSaveDriverInfo(request, db, authResult.user!.id)
+	}
+
+	if (path === '/api/config/driver-info' && request.method === 'DELETE') {
+		return handleDeleteDriverInfo(request, db, authResult.user!.id)
 	}
 
 	return new Response('Not Found', { status: 404 })
@@ -516,8 +549,12 @@ async function handleShopifyWebhook(request: Request, env: Env, db: DatabaseServ
 			lineItemsCount: completeOrderData.line_items?.length || 0,
 			tags: completeOrderData.tags,
 			note: completeOrderData.note
-		})
-
+		});
+		// Log the full line_items array for debugging removed/cancelled items
+		console.log('=== RAW LINE_ITEMS ARRAY START ===');
+		console.log('Raw line_items array:', JSON.stringify(completeOrderData.line_items, null, 2));
+		console.log('=== RAW LINE_ITEMS ARRAY END ===');
+		
 		try {
 			// Check if order already exists
 			const existingOrder = await db.getOrderByShopifyId(store.id, parseInt(orderId))
@@ -540,6 +577,11 @@ async function handleShopifyWebhook(request: Request, env: Env, db: DatabaseServ
 				console.log('Called db.getExtractProcessingMappings() WITHOUT parameters')
 				console.log('Result length:', extractMappings.length)
 				console.log('=== END WEBHOOK HANDLER DEBUG ===')
+				
+				// Log the raw line_items array BEFORE processing
+				console.log('=== RAW LINE_ITEMS ARRAY START ===');
+				console.log('Raw line_items array:', JSON.stringify(completeOrderData.line_items, null, 2));
+				console.log('=== RAW LINE_ITEMS ARRAY END ===');
 				
 				// Process the order using global mappings with complete data
 				const processedDataArray = processShopifyOrder(completeOrderData, globalMappings, extractMappings)
@@ -571,6 +613,11 @@ async function handleShopifyWebhook(request: Request, env: Env, db: DatabaseServ
 			console.log('Called db.getExtractProcessingMappings() WITHOUT parameters')
 			console.log('Result length:', extractMappings.length)
 			console.log('=== END WEBHOOK HANDLER DEBUG ===')
+			
+			// Log the raw line_items array BEFORE processing
+			console.log('=== RAW LINE_ITEMS ARRAY START ===');
+			console.log('Raw line_items array:', JSON.stringify(completeOrderData.line_items, null, 2));
+			console.log('=== RAW LINE_ITEMS ARRAY END ===');
 			
 			// Process the order using global mappings with complete data
 			const processedDataArray = processShopifyOrder(completeOrderData, globalMappings, extractMappings)
@@ -2420,5 +2467,173 @@ async function handleUpdateDetrackApiKey(db: DatabaseService): Promise<Response>
 			status: 500,
 			headers: { 'Content-Type': 'application/json' }
 		})
+	}
+}
+
+async function handleGetDetrackJobTypes(db: DatabaseService): Promise<Response> {
+	try {
+		const detrackConfig = await getDetrackConfig(db)
+		if (!detrackConfig?.apiKey) {
+			return new Response(JSON.stringify({ error: 'Detrack API key not configured' }), { status: 500 })
+		}
+		const detrackUrl = `https://app.detrack.com/api/v2/dn/jobs/do_number?type=DeliveryParameters`
+		const resp = await fetch(detrackUrl, {
+			method: 'GET',
+			headers: {
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json',
+			},
+		})
+		if (!resp.ok) {
+			const errText = await resp.text()
+			return new Response(JSON.stringify({ error: 'Detrack API error', details: errText }), { status: resp.status })
+		}
+		const data = await resp.json()
+		return new Response(JSON.stringify({ jobTypes: data.data || [] }), { status: 200 })
+	} catch (error: any) {
+		return new Response(JSON.stringify({ error: error.message || 'Failed to fetch Detrack job types' }), { status: 500 })
+	}
+}
+
+async function handleGetDetrackJobs(request: Request, db: DatabaseService): Promise<Response> {
+	try {
+		const url = new URL(request.url)
+		const type = url.searchParams.get('type') || 'Delivery'
+		const date = url.searchParams.get('date')
+		if (!date) {
+			return new Response(JSON.stringify({ error: 'Missing date parameter' }), { status: 400 })
+		}
+		const detrackConfig = await getDetrackConfig(db)
+		if (!detrackConfig?.apiKey) {
+			return new Response(JSON.stringify({ error: 'Detrack API key not configured' }), { status: 500 })
+		}
+		// Proxy to Detrack with increased limit
+		const detrackUrl = `https://app.detrack.com/api/v2/dn/jobs?type=${encodeURIComponent(type)}&date=${encodeURIComponent(date)}&limit=200`
+		const resp = await fetch(detrackUrl, {
+			method: 'GET',
+			headers: {
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json',
+			},
+		})
+		if (!resp.ok) {
+			const errText = await resp.text()
+			return new Response(JSON.stringify({ error: 'Detrack API error', details: errText }), { status: resp.status })
+		}
+		const data = await resp.json()
+		// Normalize jobs for frontend with description field
+		const jobs = (data.data || []).map((job: any) => {
+			// Extract description from items array or job description field
+			let description = '';
+			if (job.items && job.items.length > 0) {
+				// Get description from first item
+				description = job.items[0].description || '';
+			} else if (job.description) {
+				// Fallback to job description field
+				description = job.description;
+			}
+			
+			return {
+				date: job.date || '',
+				do_number: job.do_number || '',
+				assign_to: job.assign_to || '',
+				status: job.status || '',
+				time_window: job.time_window || '',
+				description: description,
+			};
+		})
+		return new Response(JSON.stringify({ jobs }), { status: 200 })
+	} catch (error: any) {
+		return new Response(JSON.stringify({ error: error.message || 'Failed to fetch Detrack jobs' }), { status: 500 })
+	}
+}
+
+// Configuration data endpoints (Product Labels and Driver Info)
+async function handleGetProductLabels(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		// Implement logic to fetch product labels for the user
+		const productLabels = await db.getProductLabelsForUser(userId)
+		// Map DB fields to camelCase for frontend
+		const mapped = productLabels.map((p: any) => ({
+			id: p.id,
+			productName: p.product_name,
+			label: p.label,
+			createdAt: p.created_at,
+			updatedAt: p.updated_at
+		}))
+		return new Response(JSON.stringify({ productLabels: mapped }), { status: 200 })
+	} catch (error) {
+		console.error('Error getting product labels:', error)
+		return new Response(JSON.stringify({ error: 'Failed to get product labels' }), { status: 500 })
+	}
+}
+
+async function handleSaveProductLabels(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		// Implement logic to save product labels for the user
+		const updatedLabels = await request.json()
+		await db.saveProductLabelsForUser(userId, updatedLabels)
+		return new Response(JSON.stringify({ success: true }), { status: 200 })
+	} catch (error) {
+		console.error('Error saving product labels:', error)
+		return new Response(JSON.stringify({ error: 'Failed to save product labels' }), { status: 500 })
+	}
+}
+
+async function handleDeleteProductLabels(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		// Implement logic to delete product labels for the user
+		const labelIds = await request.json()
+		await db.deleteProductLabelsForUser(userId, labelIds)
+		return new Response(JSON.stringify({ success: true }), { status: 200 })
+	} catch (error) {
+		console.error('Error deleting product labels:', error)
+		return new Response(JSON.stringify({ error: 'Failed to delete product labels' }), { status: 500 })
+	}
+}
+
+async function handleGetDriverInfo(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		// Implement logic to fetch driver info for the user
+		const driverInfo = await db.getDriverInfoForUser(userId)
+		// Map DB fields to camelCase for frontend
+		const mapped = driverInfo.map((d: any) => ({
+			id: d.id,
+			driverName: d.driver_name,
+			paynowNumber: d.paynow_number,
+			detrackId: d.detrack_id,
+			contactNo: d.contact_no,
+			pricePerDrop: d.price_per_drop,
+			createdAt: d.created_at,
+			updatedAt: d.updated_at
+		}))
+		return new Response(JSON.stringify({ driverInfo: mapped }), { status: 200 })
+	} catch (error) {
+		console.error('Error getting driver info:', error)
+		return new Response(JSON.stringify({ error: 'Failed to get driver info' }), { status: 500 })
+	}
+}
+
+async function handleSaveDriverInfo(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		// Implement logic to save driver info for the user
+		const updatedInfo = await request.json()
+		await db.saveDriverInfoForUser(userId, updatedInfo)
+		return new Response(JSON.stringify({ success: true }), { status: 200 })
+	} catch (error) {
+		console.error('Error saving driver info:', error)
+		return new Response(JSON.stringify({ error: 'Failed to save driver info' }), { status: 500 })
+	}
+}
+
+async function handleDeleteDriverInfo(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		// Implement logic to delete driver info for the user
+		const infoIds = await request.json()
+		await db.deleteDriverInfoForUser(userId, infoIds)
+		return new Response(JSON.stringify({ success: true }), { status: 200 })
+	} catch (error) {
+		console.error('Error deleting driver info:', error)
+		return new Response(JSON.stringify({ error: 'Failed to delete driver info' }), { status: 500 })
 	}
 }

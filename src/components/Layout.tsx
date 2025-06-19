@@ -1,13 +1,11 @@
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useIsMobile } from "@/components/hooks/use-mobile"
 
 interface LayoutProps {
   children: React.ReactNode
-  activeTab: "dashboard" | "settings"
-  onTabChange: (tab: "dashboard" | "settings") => void
+  activeTab: "dashboard" | "settings" | "analytics" | "info"
+  onTabChange: (tab: "dashboard" | "settings" | "analytics" | "info") => void
   onLogout: () => void
 }
 
@@ -32,6 +30,18 @@ export function Layout({ children, activeTab, onTabChange, onLogout }: LayoutPro
                     className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
                   >
                     {isMobile ? 'Dash' : 'Dashboard'}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="analytics"
+                    className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
+                  >
+                    Analytics
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="info"
+                    className="data-[state=active]:bg-olive-600 data-[state=active]:text-white"
+                  >
+                    Info
                   </TabsTrigger>
                   <TabsTrigger
                     value="settings"

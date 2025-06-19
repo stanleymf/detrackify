@@ -57,6 +57,19 @@ export function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<string>("all")
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>("all")
 
+  // Load global field mappings from storage
+  const [globalFieldMappings, setGlobalFieldMappings] = useState<any[]>([])
+  useEffect(() => {
+    const settings = storage.getSettings()
+    setGlobalFieldMappings(settings.globalFieldMappings || [])
+  }, [])
+
+  // Helper to check if a field is noMapping
+  const isNoMapping = (field: string) => {
+    const mapping = globalFieldMappings.find((m) => m.dashboardField === field)
+    return mapping && mapping.noMapping
+  }
+
   // Load saved column configuration on mount
   useEffect(() => {
     const savedConfigs = storage.getDashboardConfig()
@@ -276,6 +289,9 @@ export function Dashboard() {
     const isEditing = editingCell?.orderId === order.id && editingCell?.field === field
 
     if (field === "status") {
+      if (isNoMapping("status")) {
+        return <span>-</span>
+      }
       return getStatusBadge(order.status)
     }
 
@@ -364,13 +380,14 @@ export function Dashboard() {
   })
 
   // Group express orders by unique order (to avoid duplicates from line items)
-  const uniqueExpressOrders = new Map<string, { deliveryOrderNo: string; fullLineItem: string }>()
+  const uniqueExpressOrders = new Map<string, { deliveryOrderNo: string; fullLineItem: string; address: string }>()
   expressOrders.forEach(order => {
     const baseOrderId = order.id.includes('-') ? order.id.split('-')[0] : order.id
     if (!uniqueExpressOrders.has(baseOrderId)) {
       uniqueExpressOrders.set(baseOrderId, {
         deliveryOrderNo: order.deliveryOrderNo || '',
-        fullLineItem: order.description || '' // This contains the full line item title + variant title
+        fullLineItem: order.description || '', // This contains the full line item title + variant title
+        address: order.address || ''
       })
     }
   })
@@ -735,6 +752,9 @@ export function Dashboard() {
                   <div className="font-medium text-purple-700 text-sm">{order.deliveryOrderNo}</div>
                   <div className="text-muted-foreground text-xs truncate" title={order.fullLineItem}>
                     {order.fullLineItem}
+                  </div>
+                  <div className="text-muted-foreground text-xs truncate mt-1" title={order.address}>
+                    📍 {order.address}
                   </div>
                 </div>
               ))}

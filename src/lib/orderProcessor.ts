@@ -77,16 +77,16 @@ export class OrderProcessor {
         const timeValue = match[1]
         console.log(`Found time window in tag "${tag}": "${timeValue}"`)
         
-        // Convert time window to job release time
+        // Convert time window to job release time (using 24-hour format)
         switch (timeValue) {
           case '10:00-14:00':
-            return '8:45am'
+            return '08:45'
           case '11:00-15:00':
-            return '8:45am'
+            return '08:45'
           case '14:00-18:00':
-            return '1:45pm'
+            return '13:45'
           case '18:00-22:00':
-            return '5:15pm'
+            return '17:15'
           default:
             console.log(`Unknown time window: ${timeValue}`)
             return ''
@@ -164,6 +164,10 @@ export class OrderProcessor {
    */
   calculateItemCount(): string {
     const totalQuantity = this.order.line_items.reduce((sum, item) => {
+      // Only count items that are not removed/cancelled
+      if (item.current_quantity === 0) {
+        return sum
+      }
       return sum + item.quantity
     }, 0)
     
@@ -178,17 +182,36 @@ export class OrderProcessor {
       return ''
     }
 
-    const descriptions = this.order.line_items.map(item => {
-      const title = item.title || ''
-      const variantTitle = item.variant_title || ''
-      
-      if (variantTitle) {
-        return `${title} - ${variantTitle}`
-      }
-      return title
-    })
+    const descriptions = this.order.line_items
+      .filter(item => !this.isLineItemRemoved(item)) // Only include non-removed items
+      .map(item => {
+        const title = item.title || ''
+        const variantTitle = item.variant_title || ''
+        
+        if (variantTitle) {
+          return `${title} - ${variantTitle}`
+        }
+        return title
+      })
 
     return descriptions.join(', ')
+  }
+
+  /**
+   * Check if a line item has been removed/cancelled
+   */
+  private isLineItemRemoved(item: ShopifyLineItem): boolean {
+    // Check if current_quantity is 0 (item was reduced to 0)
+    if (item.current_quantity === 0) {
+      return true
+    }
+    
+    // Check if fulfillable_quantity is 0 (item cannot be fulfilled)
+    if (item.fulfillable_quantity === 0) {
+      return true
+    }
+    
+    return false
   }
 
   /**
@@ -362,7 +385,21 @@ export function processShopifyOrder(
 
   // Create one row per line item
   if (order.line_items && order.line_items.length > 0) {
-    order.line_items.forEach((lineItem, index) => {
+    // Filter out removed/cancelled line items
+    const activeLineItems = order.line_items.filter(item => {
+      // Check if current_quantity is 0 (item was reduced to 0)
+      if (item.current_quantity === 0) {
+        console.log(`Skipping removed line item: ${item.title} (current_quantity: 0)`)
+        return false
+      }
+      
+      // Note: We don't check fulfillable_quantity because it becomes 0 when orders are fulfilled
+      // regardless of whether items were removed or not
+      
+      return true
+    })
+
+    activeLineItems.forEach((lineItem, index) => {
       const row: Record<string, string> = {
         // Order-level fields (same for all line items)
         ...processedFields,

@@ -4,9 +4,11 @@ import { Dashboard } from "@/components/Dashboard"
 import { Settings } from "@/components/Settings"
 import { Login } from "@/components/Login"
 import { initializeMockData } from "@/lib/mockData"
+import Analytics from "@/components/Analytics"
+import Info from "@/components/Info"
 
 function App() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "settings">("dashboard")
+  const [activeTab, setActiveTab] = useState<"dashboard" | "settings" | "analytics" | "info">("dashboard")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -75,6 +77,8 @@ function App() {
     <Layout activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout}>
       {activeTab === "dashboard" && <Dashboard />}
       {activeTab === "settings" && <Settings />}
+      {activeTab === "analytics" && <Analytics />}
+      {activeTab === "info" && <Info />}
     </Layout>
   )
 }

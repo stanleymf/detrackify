@@ -586,7 +586,7 @@ export class DatabaseService {
     `).bind(
       id, 
       config.apiKey, 
-      config.baseUrl || 'https://api.detrack.com/v2',
+      config.baseUrl || 'https://app.detrack.com/api/v2',
       config.isEnabled ? 1 : 0,
       now, 
       now
@@ -608,11 +608,101 @@ export class DatabaseService {
 
   async markWebhookEventProcessed(id: string, errorMessage?: string): Promise<void> {
     const now = new Date().toISOString()
-    
     await this.db.prepare(`
       UPDATE webhook_events 
       SET processed = ?, processed_at = ?, error_message = ?
       WHERE id = ?
     `).bind(true, now, errorMessage || null, id).run()
+  }
+
+  // Product Labels Management
+  async getProductLabelsForUser(userId: string): Promise<any[]> {
+    const result = await this.db.prepare(`
+      SELECT id, product_name, label, created_at, updated_at
+      FROM product_labels 
+      WHERE user_id = ? 
+      ORDER BY created_at DESC
+    `).bind(userId).all<any>()
+    return result.results || []
+  }
+
+  async saveProductLabelsForUser(userId: string, productLabels: any[]): Promise<void> {
+    // First, delete all existing product labels for this user
+    await this.db.prepare('DELETE FROM product_labels WHERE user_id = ?').bind(userId).run()
+    
+    // Then insert the new ones
+    if (productLabels.length > 0) {
+      const statements = productLabels.map(label => 
+        this.db.prepare(`
+          INSERT INTO product_labels (id, user_id, product_name, label, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+          label.id || generateUUID(),
+          userId,
+          label.productName,
+          label.label,
+          new Date().toISOString(),
+          new Date().toISOString()
+        )
+      )
+      await this.db.batch(statements)
+    }
+  }
+
+  async deleteProductLabelsForUser(userId: string, labelIds: string[]): Promise<void> {
+    if (labelIds.length > 0) {
+      const placeholders = labelIds.map(() => '?').join(',')
+      await this.db.prepare(`
+        DELETE FROM product_labels 
+        WHERE user_id = ? AND id IN (${placeholders})
+      `).bind(userId, ...labelIds).run()
+    }
+  }
+
+  // Driver Info Management
+  async getDriverInfoForUser(userId: string): Promise<any[]> {
+    const result = await this.db.prepare(`
+      SELECT id, driver_name, paynow_number, detrack_id, contact_no, price_per_drop, created_at, updated_at
+      FROM driver_info 
+      WHERE user_id = ? 
+      ORDER BY created_at DESC
+    `).bind(userId).all<any>()
+    return result.results || []
+  }
+
+  async saveDriverInfoForUser(userId: string, driverInfos: any[]): Promise<void> {
+    // First, delete all existing driver info for this user
+    await this.db.prepare('DELETE FROM driver_info WHERE user_id = ?').bind(userId).run()
+    
+    // Then insert the new ones
+    if (driverInfos.length > 0) {
+      const statements = driverInfos.map(driver => 
+        this.db.prepare(`
+          INSERT INTO driver_info (id, user_id, driver_name, paynow_number, detrack_id, contact_no, price_per_drop, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          driver.id || generateUUID(),
+          userId,
+          driver.driverName,
+          driver.paynowNumber,
+          driver.detrackId,
+          driver.contactNo,
+          driver.pricePerDrop,
+          new Date().toISOString(),
+          new Date().toISOString()
+        )
+      )
+      await this.db.batch(statements)
+    }
+  }
+
+  async deleteDriverInfoForUser(userId: string, infoIds: string[]): Promise<void> {
+    if (infoIds.length > 0) {
+      const placeholders = infoIds.map(() => '?').join(',')
+      await this.db.prepare(`
+        DELETE FROM driver_info 
+        WHERE user_id = ? AND id IN (${placeholders})
+      `).bind(userId, ...infoIds).run()
+    }
   }
 } 

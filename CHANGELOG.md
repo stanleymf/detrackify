@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
 - **API Endpoint Consistency** - All test endpoints now use the correct v2 API format
 - **Payload Format** - Fixed payload structure to match successful GET response format
 - **Test Endpoint Routing** - Corrected main test endpoint to use proper v2 implementation
+- **Detrack Jobs API Endpoint** - Updated Analytics page to use correct Detrack API endpoint format (`type=DeliveryParameters` instead of `type=Delivery&date=`)
 
 ### Technical Improvements
 - **Database Service Updates** - Updated all order retrieval methods to use 200 as default limit
@@ -86,22 +87,35 @@ All notable changes to this project will be documented in this file.
 ## [0.6.0] - 2024-01-XX
 
 ### Added
-- **Direct Dashboard Field Export** - Export to Detrack now uses exact dashboard fields instead of complex transformation logic
-- **Simplified Export Logic** - Removed complex field mapping transformation in favor of direct field usage
-- **Enhanced Export Logging** - Detailed logging shows exact data being sent to Detrack API
-- **Export Data Validation** - Logs show complete order data structure before API submission
+- **Express Orders Address Display** - Enhanced Express stat card in Dashboard to show delivery addresses alongside order numbers and line items
+- **Address Field Integration** - Express orders now display complete delivery information including addresses with location pin emoji (📍)
+- **Improved Express Order Visibility** - Better identification and management of Express deliveries with full address context
 
 ### Changed
-- **Export Data Source** - Export now uses dashboard display fields directly instead of transformed data
-- **Export Field Mapping** - Simplified to use dashboard fields that match CSV format previously used for manual import
-- **Export Process** - Removed complex transformation layer, now directly maps dashboard fields to Detrack format
-- **API Request Structure** - Export requests now contain the exact field structure shown in dashboard
+- **Express Stat Card Layout** - Updated Express orders display to include address field for better delivery management
+- **Express Order Data Structure** - Enhanced data collection to capture and display address information for Express orders
+- **Express Card Styling** - Added address display with truncation and hover tooltips for better UX
 
 ### Fixed
-- **Export Field Mismatch** - Fixed issue where export used transformed data instead of dashboard fields
-- **Export Data Accuracy** - Export now sends the same data structure shown in dashboard display
-- **Export Complexity** - Simplified export logic to match user expectations from dashboard view
-- **Export Reliability** - Direct field mapping reduces potential for data transformation errors
+- **Case-Insensitive Driver Matching** - Fixed Part-Time Pay section in Analytics to match driver names case-insensitively (e.g., "Praga" now matches "praga")
+- **Product Labels Field Mapping** - Fixed Product Labels section in Info page to properly map database snake_case fields to frontend camelCase
+- **Product Labels Data Persistence** - Resolved issue where product names would disappear on page refresh due to field mapping mismatch
+- **Driver Name Matching Logic** - Updated Analytics Part-Time Pay to use case-insensitive comparison for better driver order matching
+- **Database Field Mapping** - Added proper field mapping for product labels API to handle snake_case to camelCase conversion
+
+## [0.5.1] - 2024-01-XX
+
+### Fixed
+- **Removed Line Items Filtering** - Fixed order processing to properly filter out line items with `current_quantity === 0` (removed items)
+- **Item Count Calculation** - Updated `calculateItemCount()` method to only count active line items (current_quantity > 0)
+- **Description Field Accuracy** - Fixed description field to show actual product names instead of blank values
+- **Shipping Labels Count** - Corrected shipping labels count to reflect actual number of active items
+- **Order Processing Logic** - Improved filtering to distinguish between fulfilled items and actually removed items
+
+### Changed
+- **Line Item Processing** - Modified order processing to skip line items with current_quantity of 0
+- **Item Counting Logic** - Updated counting method to use same filtering logic as line item processing
+- **Data Accuracy** - Enhanced order data accuracy by properly handling removed line items
 
 ## [0.5.0] - 2024-01-XX
 

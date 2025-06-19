@@ -64,6 +64,9 @@ export interface ShopifyLineItem {
   price: string
   variant_id: number
   product_id: number
+  current_quantity?: number
+  fulfillable_quantity?: number
+  fulfillment_status?: string | null
 }
 
 export interface ShopifyFulfillment {

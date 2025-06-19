@@ -1,0 +1,62 @@
+Detrack API Support Request
+==========================
+
+Subject: Unable to Create Job via API – 500 Internal Server Error (Test Order 76382)
+
+1. API Endpoint
+---------------
+POST https://app.detrack.com/api/v2/dn/jobs
+
+2. Request Headers
+------------------
+Content-Type: application/json
+X-API-KEY: 7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4
+Accept: application/json
+
+3. Request Payload
+------------------
+{
+  "data": [
+    {
+      "type": "Delivery",
+      "do_number": "76382",
+      "date": "19/06/2025",
+      "tracking_number": "TRK76382",
+      "order_number": "76382",
+      "address": "123 Orchard Road, #12-34, Singapore 238858",
+      "deliver_to_collect_from": "John Doe",
+      "phone_number": "98765432",
+      "notify_email": "john.doe@email.com",
+      "group_name": "WF",
+      "items": [
+        {
+          "sku": "FLOWER-001",
+          "description": "Premium Flower Bouquet - Red Roses",
+          "quantity": 1
+        }
+      ]
+    }
+  ]
+}
+
+4. Error Response
+-----------------
+HTTP 500 Internal Server Error
+Response Body: <h1>Internal Server Error</h1>
+
+5. Troubleshooting Steps Taken
+-----------------------------
+- Confirmed API key is valid (GET requests to the same endpoint work and return job data).
+- Confirmed endpoint and payload format match Detrack v2 API documentation.
+- Tried with both new and previously deleted order numbers.
+- Tried with minimal and full payloads.
+- Always receive a 500 error on POST, even for new jobs.
+
+6. Questions for Detrack
+------------------------
+1. Does my API key have write permissions for job creation?
+2. Is there any additional account setup required to enable POST/job creation?
+3. Are there any required fields missing or any constraints on the payload?
+4. Is there a way to get more detailed error information for debugging?
+
+Thank you for your assistance! 
