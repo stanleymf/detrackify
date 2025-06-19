@@ -181,7 +181,13 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
   );
 }
 
-export default function Analytics() {
+export default function Analytics({ 
+  viewMode = 'auto', 
+  onViewModeChange 
+}: { 
+  viewMode?: 'auto' | 'mobile' | 'desktop'
+  onViewModeChange?: (mode: 'auto' | 'mobile' | 'desktop') => void 
+}) {
   const [jobTypes, setJobTypes] = useState<string[]>([]);
   const [type, setType] = useState('Delivery');
   const [date, setDate] = useState('');
@@ -475,7 +481,7 @@ export default function Analytics() {
                     <span className="text-2xl font-bold text-blue-600">{totalOrders}</span>
                   </CardTitle>
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>{totalOrders} orders • {driverCount} drivers</span>
+                    <span>{totalOrders} Orders • {driverCount} Drivers</span>
                     <div className="flex items-center gap-2">
                       {completedOrders > 0 && (
                         <span className="text-green-600 flex items-center gap-1">

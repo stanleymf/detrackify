@@ -717,9 +717,9 @@ export function Dashboard({
             {storeBreakdownArray.length > 0 ? (
               <div className="space-y-1">
                 {storeBreakdownArray.map(([prefix, count]) => (
-                  <div key={prefix} className="flex justify-between text-xs">
+                  <div key={prefix} className="flex justify-between text-sm">
                     <span className="text-blue-700 font-medium">{prefix}:</span>
-                    <span className="text-muted-foreground">{count}</span>
+                    <span className="text-muted-foreground font-bold text-base">{count}</span>
                   </div>
                 ))}
               </div>
