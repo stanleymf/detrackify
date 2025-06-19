@@ -24,39 +24,38 @@ import { type Order, DASHBOARD_FIELD_LABELS, type DashboardColumnConfig } from "
 import { storage } from "@/lib/storage"
 import { useIsMobile } from "@/components/hooks/use-mobile"
 
-export function Dashboard() {
+export function Dashboard({ 
+  viewMode = 'auto', 
+  onViewModeChange 
+}: { 
+  viewMode?: 'auto' | 'mobile' | 'desktop'
+  onViewModeChange?: (mode: 'auto' | 'mobile' | 'desktop') => void 
+}) {
   const [orders, setOrders] = useState<Order[]>([])
+  const [loadingOrders, setLoadingOrders] = useState(false)
+  const [fetchingOrders, setFetchingOrders] = useState(false)
+  const [fetchResult, setFetchResult] = useState<string | null>(null)
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set())
-  const [editingCell, setEditingCell] = useState<{ orderId: string; field: keyof Order } | null>(
-    null
-  )
-  const [editValue, setEditValue] = useState("")
+  const [editingCell, setEditingCell] = useState<{ orderId: string; field: keyof Order } | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [selectedDate, setSelectedDate] = useState<string>('all')
+  const [selectedTimeslot, setSelectedTimeslot] = useState<string>('all')
   const [columnConfigs, setColumnConfigs] = useState<DashboardColumnConfig[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(200)
+  const [totalOrderCount, setTotalOrderCount] = useState(0)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [productLabels, setProductLabels] = useState<any[]>([])
+
+  const isMobile = useIsMobile()
+  const actualViewMode = viewMode === 'auto' ? (isMobile ? 'mobile' : 'desktop') : viewMode
+
   const [resizing, setResizing] = useState<{
     field: keyof Order
     startX: number
     startWidth: number
   } | null>(null)
   
-  // Mobile state
-  const isMobile = useIsMobile()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<'auto' | 'mobile' | 'desktop'>('auto')
-  
-  // Fetch orders loading state
-  const [fetchingOrders, setFetchingOrders] = useState(false)
-  const [fetchResult, setFetchResult] = useState<string | null>(null)
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize] = useState(200) // 200 orders per page
-  const [totalOrderCount, setTotalOrderCount] = useState(0)
-  const [loadingOrders, setLoadingOrders] = useState(false)
-
-  // Filter states
-  const [selectedDate, setSelectedDate] = useState<string>("all")
-  const [selectedTimeslot, setSelectedTimeslot] = useState<string>("all")
-
   // Load global field mappings from storage
   const [globalFieldMappings, setGlobalFieldMappings] = useState<any[]>([])
   useEffect(() => {
@@ -88,14 +87,31 @@ export function Dashboard() {
     }
   }, [])
 
-  // Orders are now loaded from database via loadOrdersFromDatabase()
-
   // Auto-save column configuration when it changes
   useEffect(() => {
     if (columnConfigs.length > 0) {
       storage.saveDashboardConfig(columnConfigs)
     }
   }, [columnConfigs])
+
+  // Load product labels from server
+  useEffect(() => {
+    const loadProductLabels = async () => {
+      try {
+        const response = await fetch('/api/config/product-labels', {
+          credentials: 'include'
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setProductLabels(data.productLabels || [])
+        }
+      } catch (error) {
+        console.error('Error loading product labels:', error)
+      }
+    }
+    
+    loadProductLabels()
+  }, [])
 
   // Filter orders based on date and timeslot
   const filteredOrders = Array.isArray(orders) ? orders.filter((order) => {
@@ -394,6 +410,32 @@ export function Dashboard() {
   
   const expressOrdersArray = Array.from(uniqueExpressOrders.values())
 
+  // Get product names that have label "Stand"
+  const standProductNames = productLabels
+    .filter(product => product.label.toLowerCase() === 'stand')
+    .map(product => product.productName.toLowerCase())
+
+  // Filter orders for Flower Stands
+  const flowerStandOrders = filteredOrders.filter(order => {
+    const description = (order.description || '').toLowerCase()
+    return standProductNames.some(productName => description.includes(productName))
+  })
+
+  // Group flower stand orders by unique order (to avoid duplicates from line items)
+  const uniqueFlowerStandOrders = new Map<string, { deliveryOrderNo: string; fullLineItem: string; address: string }>()
+  flowerStandOrders.forEach(order => {
+    const baseOrderId = order.id.includes('-') ? order.id.split('-')[0] : order.id
+    if (!uniqueFlowerStandOrders.has(baseOrderId)) {
+      uniqueFlowerStandOrders.set(baseOrderId, {
+        deliveryOrderNo: order.deliveryOrderNo || '',
+        fullLineItem: order.description || '',
+        address: order.address || ''
+      })
+    }
+  })
+  
+  const flowerStandOrdersArray = Array.from(uniqueFlowerStandOrders.values())
+
   // Load orders from database
   const loadOrdersFromDatabase = async (page = currentPage, size = pageSize) => {
     try {
@@ -647,9 +689,6 @@ export function Dashboard() {
     }
   }
 
-  // Determine actual view mode
-  const actualViewMode = viewMode === 'auto' ? (isMobile ? 'mobile' : 'desktop') : viewMode
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
@@ -767,43 +806,64 @@ export function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* Flower Stands Card */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-2xl font-bold text-green-600">{flowerStandOrdersArray.length}</div>
+              <p className="text-xs text-muted-foreground">Flower Stands</p>
+            </div>
+          </div>
+          {flowerStandOrdersArray.length > 0 ? (
+            <div className={`grid gap-3 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+              {flowerStandOrdersArray.map((order, index) => (
+                <div key={index} className="p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="font-medium text-green-700 text-sm">{order.deliveryOrderNo}</div>
+                  <div className="text-muted-foreground text-xs truncate" title={order.fullLineItem}>
+                    {order.fullLineItem}
+                  </div>
+                  <div className="text-muted-foreground text-xs truncate mt-1" title={order.address}>
+                    📍 {order.address}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground text-sm py-4">
+              No Flower Stands found
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Action Buttons */}
+      <div className={`w-full flex flex-wrap gap-2 ${isMobile ? 'px-4 pb-4' : ''}`}>
+        <div className={`flex gap-2 ${isMobile ? 'w-full' : ''}`}>
+          <Button
+            onClick={handleBulkDelete}
+            disabled={selectedOrders.size === 0}
+            variant="destructive"
+            className="flex-1"
+          >
+            Delete Selected ({selectedOrders.size})
+          </Button>
+          <Button
+            onClick={handleClearAllOrders}
+            disabled={filteredOrders.length === 0}
+            variant="destructive"
+            className="flex-1"
+          >
+            Clear All Orders
+          </Button>
+        </div>
+      </div>
+
+      {/* Orders Dashboard Card */}
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-olive-600">Order Dashboard</CardTitle>
-            
-            {/* View Mode Toggle - Moved to top right */}
-            <div className="flex items-center gap-1">
-              <Button
-                variant={viewMode === 'auto' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('auto')}
-                className="text-xs"
-                title="Auto (responsive)"
-              >
-                Auto
-              </Button>
-              <Button
-                variant={viewMode === 'mobile' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('mobile')}
-                className="text-xs"
-                title="Mobile card view"
-              >
-                <Smartphone className="h-3 w-3 mr-1" />
-                {!isMobile && 'Mobile'}
-              </Button>
-              <Button
-                variant={viewMode === 'desktop' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('desktop')}
-                className="text-xs"
-                title="Desktop table view"
-              >
-                <Monitor className="h-3 w-3 mr-1" />
-                {!isMobile && 'Desktop'}
-              </Button>
-            </div>
           </div>
           
           {/* Controls Section */}
