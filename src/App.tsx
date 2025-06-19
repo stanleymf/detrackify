@@ -22,17 +22,33 @@ function NavigationTabs() {
   return (
     <div className="mb-6 flex justify-end md:justify-center">
       <Tabs value={tab}>
-        <TabsList className="bg-dust-200 gap-x-2 md:gap-x-8">
-          <NavLink to="/dashboard" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+        <TabsList className="bg-dust-200 gap-x-2 md:gap-x-8 rounded-2xl shadow-sm px-2 py-1">
+          <NavLink to="/dashboard" className={({ isActive }) =>
+            `px-6 py-2 rounded-full transition-colors duration-150 text-base font-medium ${isActive ?
+              'bg-olive-600 text-white font-bold shadow' :
+              'text-olive-700 hover:bg-olive-100 hover:text-olive-900'}`
+          }>
             Dashboard
           </NavLink>
-          <NavLink to="/analytics" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+          <NavLink to="/analytics" className={({ isActive }) =>
+            `px-6 py-2 rounded-full transition-colors duration-150 text-base font-medium ${isActive ?
+              'bg-olive-600 text-white font-bold shadow' :
+              'text-olive-700 hover:bg-olive-100 hover:text-olive-900'}`
+          }>
             Analytics
           </NavLink>
-          <NavLink to="/info" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+          <NavLink to="/info" className={({ isActive }) =>
+            `px-6 py-2 rounded-full transition-colors duration-150 text-base font-medium ${isActive ?
+              'bg-olive-600 text-white font-bold shadow' :
+              'text-olive-700 hover:bg-olive-100 hover:text-olive-900'}`
+          }>
             Info
           </NavLink>
-          <NavLink to="/settings" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+          <NavLink to="/settings" className={({ isActive }) =>
+            `px-6 py-2 rounded-full transition-colors duration-150 text-base font-medium ${isActive ?
+              'bg-olive-600 text-white font-bold shadow' :
+              'text-olive-700 hover:bg-olive-100 hover:text-olive-900'}`
+          }>
             Settings
           </NavLink>
         </TabsList>
