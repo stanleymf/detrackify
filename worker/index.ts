@@ -289,6 +289,19 @@ async function handleApiRoutes(
 		return handleDeleteTagFilter(filterId!, db, authResult.user!.id);
 	}
 
+	if (path === '/api/config/title-filters' && request.method === 'GET') {
+		return handleGetTitleFilters(request, db, authResult.user!.id);
+	}
+
+	if (path === '/api/config/title-filters' && request.method === 'POST') {
+		return handleSaveTitleFilter(request, db, authResult.user!.id);
+	}
+
+	if (path.startsWith('/api/config/title-filters/') && request.method === 'DELETE') {
+		const filterId = path.split('/').pop();
+		return handleDeleteTitleFilter(filterId!, db, authResult.user!.id);
+	}
+
 	if (path === '/api/stores/products' && request.method === 'POST') {
 		return handleFetchStoreProducts(request, db);
 	}
@@ -308,6 +321,23 @@ async function handleApiRoutes(
 
 	if (path === '/api/saved-products/check' && request.method === 'POST') {
 		return handleCheckProductSaved(request, db, authResult.user!.id);
+	}
+
+	if (path === '/api/sync/status' && request.method === 'GET') {
+		return handleGetSyncStatus(request, db, authResult.user!.id);
+	}
+
+	if (path === '/api/sync/products' && request.method === 'POST') {
+		return handleSyncProducts(request, db, authResult.user!.id);
+	}
+
+	if (path === '/api/saved-products/bulk-save' && request.method === 'POST') {
+		return handleBulkSaveProducts(request, db, authResult.user!.id);
+	}
+
+	// Add after other API routes
+	if (path === '/api/stores/products' && request.method === 'POST') {
+		return handleFetchStoreProductsByTag(request, db, authResult.user!.id);
 	}
 
 	return new Response('Not Found', { status: 404 })
@@ -2762,7 +2792,7 @@ async function handleDeleteTagFilter(filterId: string, db: DatabaseService, user
 
 async function handleFetchStoreProducts(request: Request, db: DatabaseService): Promise<Response> {
 	try {
-		const { storeId, tags } = await request.json();
+		const { storeId, tags, titles } = await request.json();
 		
 		// Get store details using DatabaseService
 		const store = await db.getStoreById(storeId);
@@ -2788,10 +2818,37 @@ async function handleFetchStoreProducts(request: Request, db: DatabaseService): 
 
 		const { products } = await response.json();
 		
-		// Filter products by tags (case-insensitive, trimmed, exact match)
+		// Filter products by tags and/or titles
 		const filteredProducts = products.filter((product: any) => {
-			const productTags = product.tags.split(',').map((t: string) => t.trim().toLowerCase());
-			return tags.some((tag: string) => productTags.includes(tag.trim().toLowerCase()));
+			// If no filters provided, return all products
+			if ((!tags || tags.length === 0) && (!titles || titles.length === 0)) {
+				return true;
+			}
+			
+			// Check tag filters - use substring matching for better results
+			if (tags && tags.length > 0) {
+				const productTags = product.tags.split(',').map((t: string) => t.trim().toLowerCase());
+				const inputTags = tags.map((tag: string) => tag.trim().toLowerCase());
+				// Debug logging for tag filtering
+				console.log(`[TagFilter] Product: ${product.title}, ProductTags:`, productTags, 'InputTags:', inputTags);
+				// Match if any input tag is a substring of any product tag
+				const hasMatchingTag = inputTags.some(inputTag =>
+					productTags.some(productTag => productTag.includes(inputTag))
+				);
+				console.log(`[TagFilter] Has matching tag:`, hasMatchingTag);
+				if (hasMatchingTag) return true;
+			}
+			
+			// Check title filters
+			if (titles && titles.length > 0) {
+				const productTitle = product.title.toLowerCase();
+				const hasMatchingTitle = titles.some((title: string) => 
+					productTitle.includes(title.trim().toLowerCase())
+				);
+				if (hasMatchingTitle) return true;
+			}
+			
+			return false;
 		});
 
 		// Transform to our format, including variant information
@@ -2931,5 +2988,298 @@ async function handleCheckProductSaved(request: Request, db: DatabaseService, us
 			status: 500,
 			headers: { 'Content-Type': 'application/json' }
 		})
+	}
+}
+
+async function handleGetTitleFilters(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		console.log('handleGetTitleFilters called with userId:', userId);
+		const url = new URL(request.url)
+		const storeId = url.searchParams.get('storeId')
+		console.log('storeId from query params:', storeId);
+		
+		const titleFilters = await db.getTitleFiltersForUser(userId, storeId || undefined)
+		console.log('Retrieved title filters:', titleFilters);
+
+		return new Response(JSON.stringify({ titleFilters }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error getting title filters:', error);
+		console.error('Error details:', {
+			message: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
+		return new Response(JSON.stringify({ error: 'Failed to get title filters' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+async function handleSaveTitleFilter(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		console.log('handleSaveTitleFilter called with userId:', userId);
+		const { title, storeId } = await request.json();
+		console.log('Request body:', { title, storeId });
+		
+		// Generate UUID for the title filter
+		const titleFilterId = globalThis.crypto.randomUUID();
+		console.log('Generated titleFilterId:', titleFilterId);
+		
+		// Save title filter using DatabaseService
+		await db.saveTitleFilter({
+			id: titleFilterId,
+			title,
+			storeId,
+			userId,
+			createdAt: new Date().toISOString()
+		});
+		console.log('Title filter saved successfully');
+
+		const titleFilter = {
+			id: titleFilterId,
+			title,
+			storeId,
+			createdAt: new Date().toISOString()
+		};
+
+		return new Response(JSON.stringify({ titleFilter }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error saving title filter:', error);
+		console.error('Error details:', {
+			message: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
+		return new Response(JSON.stringify({ error: 'Failed to save title filter' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+async function handleDeleteTitleFilter(filterId: string, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		await db.deleteTitleFilter(filterId, userId);
+
+		return new Response(JSON.stringify({ success: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error deleting title filter:', error);
+		return new Response(JSON.stringify({ error: 'Failed to delete title filter' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+async function handleGetSyncStatus(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		const url = new URL(request.url);
+		const storeId = url.searchParams.get('storeId');
+		
+		if (!storeId) {
+			return new Response(JSON.stringify({ error: 'Store ID is required' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+		
+		const syncStatus = await db.getSyncStatus(userId, storeId);
+		
+		return new Response(JSON.stringify({ syncStatus }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error getting sync status:', error);
+		return new Response(JSON.stringify({ error: 'Failed to get sync status' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+async function handleSyncProducts(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	let body: any;
+	try {
+		body = await request.json();
+		const storeId = body.storeId;
+		console.log('[SyncProducts] userId:', userId, 'storeId:', storeId);
+		if (!storeId) {
+			console.error('[SyncProducts] No storeId provided');
+			return new Response(JSON.stringify({ error: 'Store ID is required' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+		// Get store details
+		const store = await db.getStoreById(storeId);
+		if (!store) {
+			console.error('[SyncProducts] Store not found for storeId:', storeId);
+			return new Response(JSON.stringify({ error: 'Store not found' }), {
+				status: 404,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+		console.log('[SyncProducts] Store found:', store.shopify_domain, 'API version:', store.api_version);
+		// Get current sync status
+		const currentSyncStatus = await db.getSyncStatus(userId, storeId);
+		console.log('[SyncProducts] Current sync status:', currentSyncStatus);
+		// Fetch all products from Shopify
+		const allProducts = [];
+		let hasMore = true;
+		let pageInfo = null;
+		let pageCount = 0;
+		while (hasMore) {
+			const url = `https://${store.shopify_domain}/admin/api/${store.api_version}/products.json?limit=250${pageInfo ? `&page_info=${pageInfo}` : ''}`;
+			console.log(`[SyncProducts] Fetching products from Shopify:`, url);
+			const response = await fetch(url, {
+				headers: {
+					'X-Shopify-Access-Token': store.access_token,
+					'Content-Type': 'application/json'
+				}
+			});
+			console.log(`[SyncProducts] Shopify API response status:`, response.status);
+			if (!response.ok) {
+				const errorText = await response.text();
+				console.error(`[SyncProducts] Shopify API error:`, response.status, errorText);
+				throw new Error(`Shopify API error: ${response.status} ${response.statusText} - ${errorText}`);
+			}
+			const data = await response.json();
+			allProducts.push(...data.products);
+			console.log(`[SyncProducts] Fetched ${data.products.length} products, total so far: ${allProducts.length}`);
+			// Check for pagination
+			const linkHeader = response.headers.get('Link');
+			if (linkHeader && linkHeader.includes('rel="next"')) {
+				const match = linkHeader.match(/page_info=([^&>]+)/);
+				pageInfo = match ? match[1] : null;
+				hasMore = !!pageInfo;
+				pageCount++;
+				console.log(`[SyncProducts] More pages detected, pageInfo:`, pageInfo, 'pageCount:', pageCount);
+			} else {
+				hasMore = false;
+				console.log('[SyncProducts] No more pages.');
+			}
+		}
+		// Save all products to database
+		console.log(`[SyncProducts] Saving ${allProducts.length} products to DB for userId:`, userId, 'storeId:', storeId);
+		await db.saveAllProducts(userId, storeId, store.shopify_domain, allProducts);
+		// Update sync status
+		await db.updateSyncStatus(userId, storeId, {
+			last_sync: new Date().toISOString(),
+			total_products: allProducts.length,
+			last_sync_status: 'success'
+		});
+		console.log('[SyncProducts] Sync complete. Products saved:', allProducts.length);
+		return new Response(JSON.stringify({ 
+			success: true, 
+			totalProducts: allProducts.length,
+			syncTime: new Date().toISOString()
+		}), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('[SyncProducts] Error syncing products:', error && error.message);
+		if (error && error.stack) console.error('[SyncProducts] Stack:', error.stack);
+		try {
+			const storeId = body && body.storeId;
+			if (storeId) {
+				await db.updateSyncStatus(userId, storeId, {
+					last_sync_status: 'error'
+				});
+			}
+		} catch (updateError) {
+			console.error('[SyncProducts] Error updating sync status after failure:', updateError);
+		}
+		return new Response(JSON.stringify({ error: 'Failed to sync products', details: error && error.message }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+// Handler: Fetch products from Shopify by tag filter (no DB write)
+async function handleFetchStoreProductsByTag(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		const { storeId, tags } = await request.json();
+		if (!storeId) {
+			return new Response(JSON.stringify({ error: 'Store ID is required' }), { status: 400 });
+		}
+		const store = await db.getStoreById(storeId);
+		if (!store) {
+			return new Response(JSON.stringify({ error: 'Store not found' }), { status: 404 });
+		}
+		// Fetch products from Shopify
+		const url = `https://${store.shopify_domain}/admin/api/${store.api_version}/products.json?limit=250`;
+		const response = await fetch(url, {
+			headers: {
+				'X-Shopify-Access-Token': store.access_token,
+				'Content-Type': 'application/json',
+			},
+		});
+		if (!response.ok) {
+			const errorText = await response.text();
+			return new Response(JSON.stringify({ error: 'Failed to fetch products', details: errorText }), { status: 500 });
+		}
+		const data = await response.json();
+		let products = data.products || [];
+		// Enhanced tag filtering
+		if (tags && tags.length > 0) {
+			const inputTags = tags.map((t: string) => t.trim().toLowerCase()).filter(Boolean);
+			products = products.filter((product: any) => {
+				const productTags = product.tags.split(',').map((t: string) => t.trim().toLowerCase());
+				// Debug log
+				console.log(`[TagFilter] Product: ${product.title}, ProductTags:`, productTags, 'InputTags:', inputTags);
+				// Match if any input tag is a substring of any product tag
+				return inputTags.some(inputTag =>
+					productTags.some(productTag => productTag.includes(inputTag))
+				);
+			});
+		}
+		// Return filtered products
+		return new Response(JSON.stringify({ products }), { status: 200 });
+	} catch (error) {
+		console.error('[handleFetchStoreProductsByTag] Error:', error);
+		return new Response(JSON.stringify({ error: 'Failed to fetch products' }), { status: 500 });
+	}
+}
+
+// Handler: Bulk save selected products to DB
+async function handleBulkSaveProducts(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		const { products } = await request.json();
+		if (!products || !Array.isArray(products) || products.length === 0) {
+			return new Response(JSON.stringify({ error: 'No products to save' }), { status: 400 });
+		}
+		// Save each product (upsert logic)
+		for (const product of products) {
+			const savedProductId = globalThis.crypto.randomUUID();
+			await db.saveProduct({
+				id: savedProductId,
+				productId: product.id,
+				title: product.title,
+				variantTitle: product.variantTitle || '',
+				price: product.price || '0',
+				handle: product.handle,
+				tags: Array.isArray(product.tags) ? product.tags.join(', ') : product.tags,
+				orderTags: '',
+				storeId: product.storeId,
+				storeDomain: product.storeDomain,
+				userId,
+				createdAt: new Date().toISOString(),
+			});
+		}
+		return new Response(JSON.stringify({ success: true }), { status: 200 });
+	} catch (error) {
+		console.error('[handleBulkSaveProducts] Error:', error);
+		return new Response(JSON.stringify({ error: 'Failed to save products' }), { status: 500 });
 	}
 }

@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2024-12-19
+
+### Added
+- **Enhanced Tag Filtering** - Improved product tag filtering to use substring matching instead of exact matching for better search results
+- **Debug Logging for Tag Filtering** - Added comprehensive debug logging to help troubleshoot tag filtering issues
+- **Collapsible UI Components** - Fixed Collapsible component hierarchy issues and improved Saved Products section UI
+
+### Changed
+- **Tag Matching Algorithm** - Changed from exact tag matching to substring matching for more flexible product filtering
+- **Product Filter Logic** - Enhanced filtering to match partial tag names (e.g., "Condolences Stand" now matches products tagged with "Condolences Stand")
+- **UI Component Structure** - Fixed Radix UI Collapsible component nesting to prevent "white screen of death" errors
+
+### Fixed
+- **Tag Filter Not Working** - Fixed issue where searching for "Condolences Stand" wouldn't find products with that exact tag
+- **Collapsible Component Error** - Resolved "CollapsibleTrigger must be used within Collapsible" error that caused white screen
+- **Product Search Accuracy** - Improved search accuracy for products with multi-word tags or partial tag matches
+- **UI Rendering Issues** - Fixed component hierarchy issues that prevented proper UI rendering
+
+### Technical Improvements
+- **API Route Optimization** - Improved tag filtering logic in handleFetchStoreProducts function
+- **Debug Logging** - Added detailed console logging for tag filtering operations to aid troubleshooting
+- **Component Architecture** - Fixed Radix UI component nesting and improved overall component structure
+
 ## [0.8.0] - 2024-06-19
 
 ### Added
@@ -66,6 +89,9 @@ All notable changes to this project will be documented in this file.
 - Implement export UI in dashboard for when permissions are granted
 
 ## [Unreleased]
+- Added smart sync for products: only new or updated products are saved to the database on each sync.
+- Fixed saved_products table creation and schema alignment with backend logic.
+- Added updated_at column to saved_products for Shopify product update tracking.
 
 ## [0.7.0] - 2024-01-XX
 

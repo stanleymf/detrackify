@@ -20,11 +20,19 @@ import {
   Bookmark,
   BookmarkCheck,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Loader2,
+  RefreshCw,
+  Settings
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
-import type { ProductLabel, StoreProduct, TagFilter, SavedProduct } from '@/types';
+import type { ProductLabel, StoreProduct, TagFilter, TitleFilter, SavedProduct, SyncStatus } from '@/types';
 import { parseCSV } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CardDescription } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import type { ShopifyStore } from '@/types/shopify';
+import { storage } from '@/lib/storage';
 
 interface DriverInfo {
   id: string;
@@ -40,6 +48,7 @@ export default function Info({
 }: { 
   viewMode?: 'auto' | 'mobile' | 'desktop'
 }) {
+  const { toast } = useToast();
   const [productLabels, setProductLabels] = useState<ProductLabel[]>([]);
   const [driverInfos, setDriverInfos] = useState<DriverInfo[]>([]);
   const [newProductName, setNewProductName] = useState('');
@@ -77,20 +86,33 @@ export default function Info({
   const driverFileInputRef = useRef<HTMLInputElement>(null);
 
   // Store Products state
-  const [selectedStore, setSelectedStore] = useState<string>("")
-  const [stores, setStores] = useState<{ id: string; name: string; url: string }[]>([])
-  const [tagFilters, setTagFilters] = useState<TagFilter[]>([])
-  const [newTagFilter, setNewTagFilter] = useState("")
-  const [storeProducts, setStoreProducts] = useState<StoreProduct[]>([])
-  const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([])
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
-  const [savedProductIds, setSavedProductIds] = useState<Set<string>>(new Set())
+  const [selectedStore, setSelectedStore] = useState<string>("");
+  const [stores, setStores] = useState<ShopifyStore[]>([]);
+  const [tagFilters, setTagFilters] = useState<TagFilter[]>([]);
+  const [newTagFilter, setNewTagFilter] = useState("");
+  const [titleFilters, setTitleFilters] = useState<TitleFilter[]>([]);
+  const [newTitleFilter, setNewTitleFilter] = useState("");
+  const [storeProducts, setStoreProducts] = useState<StoreProduct[]>([]);
+  const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [savedProductIds, setSavedProductIds] = useState<Set<string>>(new Set());
 
   // Saved Products enhanced features
   const [savedProductsSearchTerm, setSavedProductsSearchTerm] = useState('');
   const [savedProductsCollapsed, setSavedProductsCollapsed] = useState(false);
   const [savedProductsCurrentPage, setSavedProductsCurrentPage] = useState(1);
   const savedProductsPerPage = 10;
+
+  // Sync functionality state
+  const [syncStatus, setSyncStatus] = useState<{ last_sync: string | null, total_products: number, last_sync_status: string | null } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isExpanded, setIsExpanded] = useState(true);
+  const productsPerPage = 10;
+
+  const syncStatusInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Filtered data
   const filteredProductLabels = useMemo(() => {
@@ -118,7 +140,6 @@ export default function Info({
       product.title.toLowerCase().includes(savedProductsSearchTerm.toLowerCase()) ||
       product.variantTitle?.toLowerCase().includes(savedProductsSearchTerm.toLowerCase()) ||
       product.tags.some(tag => tag.toLowerCase().includes(savedProductsSearchTerm.toLowerCase())) ||
-      product.orderTags.some(tag => tag.toLowerCase().includes(savedProductsSearchTerm.toLowerCase())) ||
       product.storeDomain.toLowerCase().includes(savedProductsSearchTerm.toLowerCase())
     );
   }, [savedProducts, savedProductsSearchTerm]);
@@ -131,25 +152,18 @@ export default function Info({
 
   const totalSavedProductsPages = Math.ceil(filteredSavedProducts.length / savedProductsPerPage);
 
-  // Load stores from database
-  const loadStoresFromDB = async () => {
-    try {
-      const response = await fetch('/api/stores', { credentials: 'include' })
-      if (response.ok) {
-        const storesData = await response.json()
-        const formattedStores = storesData.map((store: any) => ({
-          id: store.id,
-          name: store.store_name,
-          url: store.shopify_domain
-        }))
-        setStores(formattedStores)
-      }
-    } catch (error) {
-      console.error('Error loading stores:', error)
-    }
-  }
+  // Add state for tag filter, fetched products, and selected fetched products
+  const [tagFilter, setTagFilter] = useState('');
+  const [fetchedProducts, setFetchedProducts] = useState<any[]>([]);
+  const [selectedFetched, setSelectedFetched] = useState<Set<string>>(new Set());
 
-  // Load data from server on component mount
+  // Add state for loading
+  const [fetching, setFetching] = useState(false);
+
+  // Add state for fetched products search
+  const [fetchedProductsSearchTerm, setFetchedProductsSearchTerm] = useState('');
+
+  // Load stores from local storage (Settings)
   useEffect(() => {
     // Clear any existing localStorage data since we've migrated to server-side storage
     clearLocalStorageData();
@@ -681,7 +695,7 @@ export default function Info({
     window.URL.revokeObjectURL(url);
   };
 
-  // Load tag filters from server
+  // Load tag filters when store changes
   useEffect(() => {
     if (selectedStore) {
       loadTagFilters()
@@ -714,56 +728,14 @@ export default function Info({
     )
   }, [storeProducts, productSearchTerm])
 
-  // Add new tag filter
-  const addTagFilter = async () => {
-    if (!newTagFilter.trim() || !selectedStore) return
-
-    try {
-      const response = await fetch('/api/config/tag-filters', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          tag: newTagFilter.trim(),
-          storeId: selectedStore
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setTagFilters([...tagFilters, data.tagFilter])
-        setNewTagFilter('')
-      }
-    } catch (error) {
-      console.error('Error adding tag filter:', error)
-    }
-  }
-
-  // Remove tag filter
-  const removeTagFilter = async (id: string) => {
-    try {
-      const response = await fetch(`/api/config/tag-filters/${id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        setTagFilters(tagFilters.filter(filter => filter.id !== id))
-      }
-    } catch (error) {
-      console.error('Error removing tag filter:', error)
-    }
-  }
-
-  // Fetch products based on tags
+  // Fetch products based on tags and titles
   const fetchProducts = async () => {
     if (!selectedStore) return
 
     setIsLoadingProducts(true)
     try {
       const storeTagFilters = tagFilters.filter(filter => filter.storeId === selectedStore)
+      
       const response = await fetch('/api/stores/products', {
         method: 'POST',
         headers: {
@@ -827,11 +799,11 @@ export default function Info({
           price: product.price,
           handle: product.handle,
           tags: product.tags,
-          orderTags: product.orderTags,
           storeId: product.storeId,
           storeDomain: product.storeDomain,
           userId: '', // Will be set by the server
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          orderTags: product.orderTags || []
         }
         setSavedProducts([savedProduct, ...savedProducts])
         setSavedProductIds(new Set([...savedProductIds, product.id]))
@@ -859,6 +831,292 @@ export default function Info({
       console.error('Error removing saved product:', error)
     }
   }
+
+  const fetchSyncStatus = async () => {
+    if (!selectedStore) return
+    
+    try {
+      const response = await fetch(`/api/sync/status?storeId=${selectedStore}`)
+      if (response.ok) {
+        const data = await response.json()
+        setSyncStatus(data.syncStatus)
+      }
+    } catch (error) {
+      console.error('Error fetching sync status:', error)
+    }
+  }
+
+  const handleSyncProducts = async () => {
+    if (!selectedStore) {
+      toast({
+        title: "No store selected",
+        description: "Please select a store first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSyncing(true)
+    setSyncMessage('Starting sync...')
+    
+    try {
+      const response = await fetch('/api/sync/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ storeId: selectedStore }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSyncMessage(`Sync completed! ${data.totalProducts} products synced.`)
+        toast({
+          title: "Sync successful",
+          description: `${data.totalProducts} products have been synced.`,
+        })
+        
+        // Refresh saved products and sync status
+        loadSavedProducts()
+        fetchSyncStatus()
+      } else {
+        const errorData = await response.json()
+        setSyncMessage(`Sync failed: ${errorData.error}`)
+        toast({
+          title: "Sync failed",
+          description: errorData.error || "Failed to sync products",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      setSyncMessage(`Sync failed: ${error}`)
+      toast({
+        title: "Sync failed",
+        description: "An error occurred while syncing products",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedStore) {
+      loadSavedProducts()
+      fetchSyncStatus()
+    }
+  }, [selectedStore])
+
+  // Use existing filteredSavedProducts instead of creating new filteredProducts
+  const totalPages = Math.ceil(filteredSavedProducts.length / productsPerPage)
+  const paginatedProducts = filteredSavedProducts.slice(
+    (currentPage - 1) * productsPerPage,
+    currentPage * productsPerPage
+  )
+
+  // Select/deselect all products on the current page
+  const toggleSelectAllProductsOnPage = () => {
+    const pageIds = paginatedSavedProducts.map((p) => p.id)
+    const allSelected = pageIds.every((id) => selectedProducts.has(id))
+    const newSelected = new Set(selectedProducts)
+    if (allSelected) {
+      pageIds.forEach((id) => newSelected.delete(id))
+    } else {
+      pageIds.forEach((id) => newSelected.add(id))
+    }
+    setSelectedProducts(newSelected)
+  }
+
+  // Bulk apply label to selected products
+  const handleBulkApplyLabel = async () => {
+    if (!newLabel.trim() || selectedProducts.size === 0) return
+    // Update label for selected products in state
+    const updated = savedProducts.map((product) =>
+      selectedProducts.has(product.id)
+        ? { ...product, label: newLabel }
+        : product
+    )
+    setSavedProducts(updated)
+    setNewLabel("")
+    setSelectedProducts(new Set())
+    // Persist to server
+    try {
+      await fetch('/api/saved-products/bulk-label', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          productIds: Array.from(selectedProducts),
+          label: newLabel,
+          storeId: selectedStore
+        })
+      })
+      // Reload products from server
+      loadSavedProducts()
+    } catch (error) {
+      console.error('Failed to update labels on server', error)
+    }
+  }
+
+  // Restore loadStoresFromDB and use it in useEffect
+  const loadStoresFromDB = async () => {
+    try {
+      const response = await fetch('/api/stores', { credentials: 'include' })
+      if (response.ok) {
+        const storesData = await response.json()
+        console.log('Fetched stores from backend:', storesData)
+        setStores(storesData)
+      }
+    } catch (error) {
+      console.error('Error loading stores:', error)
+    }
+  }
+
+  const handleDeleteStore = async (storeId: string) => {
+    if (!window.confirm('Are you sure you want to delete this store?')) return;
+    try {
+      await fetch(`/api/stores/${storeId}`, { method: 'DELETE', credentials: 'include' });
+      loadStoresFromDB();
+      if (selectedStore === storeId) setSelectedStore('');
+    } catch (error) {
+      console.error('Failed to delete store:', error);
+    }
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) return;
+    try {
+      await fetch(`/api/saved-products/${productId}`, { method: 'DELETE', credentials: 'include' });
+      loadSavedProducts();
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+    }
+  };
+
+  // Poll sync status while syncing
+  useEffect(() => {
+    if (isSyncing && selectedStore) {
+      const poll = async () => {
+        try {
+          const res = await fetch(`/api/sync/status?storeId=${selectedStore}`, { credentials: 'include' });
+          if (res.ok) {
+            const data = await res.json();
+            setSyncStatus(data.syncStatus);
+            if (data.syncStatus?.last_sync_status === 'success' || data.syncStatus?.last_sync_status === 'error') {
+              setIsSyncing(false);
+              if (syncStatusInterval.current) clearInterval(syncStatusInterval.current);
+            }
+          }
+        } catch {}
+      };
+      poll();
+      syncStatusInterval.current = setInterval(poll, 2000);
+      return () => {
+        if (syncStatusInterval.current) clearInterval(syncStatusInterval.current);
+      };
+    }
+  }, [isSyncing, selectedStore]);
+
+  // Fetch products by tag
+  const fetchProductsByTag = async () => {
+    if (!selectedStore || !tagFilter.trim()) return;
+    setFetchedProducts([]);
+    setSelectedFetched(new Set());
+    setFetching(true);
+    try {
+      const res = await fetch('/api/stores/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ storeId: selectedStore, tags: tagFilter.split(',').map(t => t.trim()).filter(Boolean) })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFetchedProducts(data.products || []);
+      }
+    } catch {}
+    setFetching(false);
+  };
+
+  // Save selected fetched products
+  const handleSaveSelected = async () => {
+    if (selectedFetched.size === 0) return;
+    const toSave = fetchedProducts.filter(p => selectedFetched.has(p.id)).map(p => ({
+      id: p.id,
+      title: p.title,
+      variantTitle: p.variants?.[0]?.title || '',
+      price: p.variants?.[0]?.price || '0',
+      handle: p.handle,
+      tags: p.tags,
+      storeId: selectedStore,
+      storeDomain: stores.find(s => s.id === selectedStore)?.shopify_domain || '',
+    }));
+    await fetch('/api/saved-products/bulk-save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ products: toSave })
+    });
+    loadSavedProducts();
+    setFetchedProducts([]);
+    setSelectedFetched(new Set());
+  };
+
+  // Bulk delete selected saved products
+  const handleBulkDeleteProducts = async () => {
+    if (selectedProducts.size === 0) return;
+    if (!window.confirm('Are you sure you want to delete all selected products?')) return;
+    try {
+      await fetch('/api/saved-products/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ productIds: Array.from(selectedProducts) })
+      });
+      setSelectedProducts(new Set());
+      loadSavedProducts();
+    } catch (err) {
+      // Optionally show a toast or error
+    }
+  };
+
+  // Pagination for fetched products
+  const fetchedProductsPerPage = 20;
+  const [fetchedProductsPage, setFetchedProductsPage] = useState(1);
+  const sortedFetchedProducts = useMemo(() => {
+    // Remove duplicates by id (or by title+variant if id is not unique)
+    const seen = new Set();
+    return fetchedProducts
+      .filter(p => {
+        const key = p.id || (p.title + (p.variants?.[0]?.title || ''));
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => {
+        const tA = a.title.toLowerCase();
+        const tB = b.title.toLowerCase();
+        if (tA !== tB) return tA.localeCompare(tB);
+        const vA = (a.variants?.[0]?.title || '').toLowerCase();
+        const vB = (b.variants?.[0]?.title || '').toLowerCase();
+        return vA.localeCompare(vB);
+      });
+  }, [fetchedProducts]);
+  const totalFetchedPages = Math.ceil(sortedFetchedProducts.length / fetchedProductsPerPage);
+  const paginatedFetchedProducts = useMemo(() => {
+    const start = (fetchedProductsPage - 1) * fetchedProductsPerPage;
+    return sortedFetchedProducts.slice(start, start + fetchedProductsPerPage);
+  }, [sortedFetchedProducts, fetchedProductsPage]);
+
+  // Filter fetched products based on search term
+  const filteredFetchedProducts = useMemo(() => {
+    if (!fetchedProductsSearchTerm.trim()) return sortedFetchedProducts;
+    return sortedFetchedProducts.filter(product => 
+      product.title.toLowerCase().includes(fetchedProductsSearchTerm.toLowerCase()) ||
+      product.variants?.[0]?.title?.toLowerCase().includes(fetchedProductsSearchTerm.toLowerCase()) ||
+      product.tags.some((tag: string) => tag.toLowerCase().includes(fetchedProductsSearchTerm.toLowerCase()))
+    );
+  }, [sortedFetchedProducts, fetchedProductsSearchTerm]);
 
   return (
     <div className="space-y-8">
@@ -914,910 +1172,741 @@ export default function Info({
         </Card>
       )}
 
-      {/* Product Labels Container */}
-      <Card>
-        <CardHeader>
+      {/* Store Products */}
+      <Card className="max-w-7xl mx-auto">
+        <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Product Labels
+            Store Products Management
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Manage product names and their corresponding labels for order processing
-          </p>
+          <CardDescription>
+            Fetch, organize, and manage your store's products with advanced filtering and bulk operations.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Add New Product */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium mb-2">Product Name</label>
-              <Input
-                value={newProductName}
-                onChange={(e) => setNewProductName(e.target.value)}
-                onKeyPress={handleProductKeyPress}
-                placeholder="Enter product name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Label</label>
-              <Input
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-                onKeyPress={handleProductKeyPress}
-                placeholder="Enter label"
-              />
-            </div>
-            <Button onClick={addProductLabel} disabled={!newProductName.trim() || !newLabel.trim()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Product
-            </Button>
-          </div>
-
-          {/* CSV Import Section */}
-          <Card className="bg-gray-50 border-dashed">
-            <CardContent className="p-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium mb-2">Import CSV</label>
-                  <p className="text-xs text-gray-600 mb-2">
-                    Upload a CSV file with "Product Name" and "Label" columns
-                  </p>
-                  <input
-                    ref={productFileInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleProductCSVImport}
-                    className="hidden"
+        <CardContent className="space-y-8 pt-6">
+          {/* Configuration Section */}
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              Configuration
+            </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <Label htmlFor="store-select" className="text-sm font-medium">Select Store</Label>
+                <Select value={selectedStore} onValueChange={setSelectedStore}>
+                  <SelectTrigger id="store-select" className="w-full">
+                    <SelectValue placeholder="Choose a store to work with" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          {store.shopify_domain}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-3">
+                <Label htmlFor="tag-filter" className="text-sm font-medium">Product Filter</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    id="tag-filter" 
+                    value={tagFilter} 
+                    onChange={e => setTagFilter(e.target.value)} 
+                    placeholder="e.g., roses, birthday, anniversary" 
+                    className="flex-1" 
                   />
-                  <Button
-                    variant="outline"
-                    onClick={() => productFileInputRef.current?.click()}
-                    className="text-sm"
+                  <Button 
+                    onClick={fetchProductsByTag} 
+                    disabled={!selectedStore || !tagFilter.trim() || fetching}
+                    className="min-w-[100px]"
                   >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Choose CSV File
+                    {fetching ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Fetching...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 mr-2" />
+                        Fetch
+                      </>
+                    )}
                   </Button>
                 </div>
-                <div className="text-xs text-gray-600 bg-white p-3 rounded border">
-                  <p className="font-medium mb-1">CSV Format:</p>
-                  <p>Product Name,Label</p>
-                  <p>Example Product,Example Label</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Search and Bulk Actions */}
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex-1 max-w-md">
-              <label className="block text-sm font-medium mb-2">Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="Search products..."
-                  value={productSearchTerm}
-                  onChange={(e) => setProductSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+                <p className="text-xs text-gray-500">
+                  Enter tags separated by commas to filter products from your store
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={selectedProducts.size === filteredProductLabels.length && filteredProductLabels.length > 0}
-                  onCheckedChange={selectAllProducts}
-                />
-                <span className="text-sm text-gray-600">
-                  Select All ({selectedProducts.size} selected)
-                </span>
+          </div>
+
+          {/* Fetched Products Section */}
+          <div className="space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Fetched Products
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {sortedFetchedProducts.length > 0 
+                    ? `${sortedFetchedProducts.length} products found matching your filter`
+                    : 'No products fetched yet'
+                  }
+                </p>
               </div>
-              {selectedProducts.size > 0 && (
-                <Button
-                  variant="outline"
-                  onClick={deleteSelectedProducts}
-                  className="text-red-600 hover:text-red-700"
-                  size="sm"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Selected ({selectedProducts.size})
-                </Button>
+              {sortedFetchedProducts.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">{selectedFetched.size}</span> selected
+                  </div>
+                  <Button 
+                    onClick={handleSaveSelected} 
+                    disabled={selectedFetched.size === 0}
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Selected ({selectedFetched.size})
+                  </Button>
+                </div>
               )}
             </div>
-          </div>
 
-          {/* Products Table */}
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedProducts.size === filteredProductLabels.length && filteredProductLabels.length > 0}
-                      onCheckedChange={selectAllProducts}
-                    />
-                  </TableHead>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Label</TableHead>
-                  <TableHead className="w-24">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProductLabels.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8">
-                      {productLabels.length === 0 ? (
-                        <div className="text-center">
-                          <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Product Labels</h3>
-                          <p className="text-gray-600 mb-4">Add your first product label to get started.</p>
-                        </div>
-                      ) : (
-                        <div className="text-center">
-                          <Search className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Found</h3>
-                          <p className="text-gray-600">Try adjusting your search terms.</p>
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredProductLabels.map((product) => (
-                    <TableRow key={product.id} className="hover:bg-gray-50">
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedProducts.has(product.id)}
-                          onCheckedChange={() => toggleProductSelection(product.id)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {editingProductId === product.id ? (
-                          <Input
-                            value={editingProductName}
-                            onChange={(e) => setEditingProductName(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && saveProductEdit()}
-                            onBlur={saveProductEdit}
-                            autoFocus
-                          />
-                        ) : (
-                          <div 
-                            className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors"
-                            onClick={() => startEditingProduct(product)}
-                          >
-                            {product.productName}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingProductId === product.id ? (
-                          <Input
-                            value={editingProductLabel}
-                            onChange={(e) => setEditingProductLabel(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && saveProductEdit()}
-                            onBlur={saveProductEdit}
-                          />
-                        ) : (
-                          <div 
-                            className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors"
-                            onClick={() => startEditingProduct(product)}
-                          >
-                            <Badge variant="outline">{product.label}</Badge>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingProductId === product.id ? (
-                          <div className="flex gap-1">
-                            <Button size="sm" onClick={saveProductEdit}>
-                              <Save className="w-3 h-3 mr-1" />
-                              Save
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={cancelEdit}>
-                              <X className="w-3 h-3 mr-1" />
-                              Cancel
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => startEditingProduct(product)}
-                            >
-                              <Edit className="w-3 h-3 mr-1" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeProductLabel(product.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="w-3 h-3 mr-1" />
-                              Remove
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Store Products Container */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Store Products
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Fetch and manage products from your Shopify stores based on product tags
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Store Selection and Tag Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-            <div>
-              <Label className="block text-sm font-medium mb-2">Select Store</Label>
-              <select
-                value={selectedStore}
-                onChange={(e) => setSelectedStore(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-              >
-                <option value="">Choose a store...</option>
-                {stores.map(store => (
-                  <option key={store.id} value={store.id}>{store.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-2">Add Tag Filter</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={newTagFilter}
-                  onChange={(e) => setNewTagFilter(e.target.value)}
-                  placeholder="Enter tag to filter"
-                  onKeyPress={(e) => e.key === 'Enter' && addTagFilter()}
-                />
-                <Button onClick={addTagFilter} disabled={!newTagFilter.trim() || !selectedStore}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add
-                </Button>
-              </div>
-            </div>
-            <div className="flex items-end">
-              <Button 
-                onClick={fetchProducts} 
-                disabled={!selectedStore || tagFilters.filter(f => f.storeId === selectedStore).length === 0}
-                className="w-full"
-              >
-                <Package className="w-4 h-4 mr-2" />
-                Fetch Products
-              </Button>
-            </div>
-          </div>
-
-          {/* Active Tag Filters */}
-          {tagFilters.filter(filter => filter.storeId === selectedStore).length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {tagFilters
-                .filter(filter => filter.storeId === selectedStore)
-                .map(filter => (
-                  <Badge key={filter.id} variant="secondary" className="px-3 py-1">
-                    {filter.tag}
-                    <button
-                      onClick={() => removeTagFilter(filter.id)}
-                      className="ml-2 hover:text-red-600"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))
-              }
-            </div>
-          )}
-
-          {/* Products Search */}
-          {storeProducts.length > 0 && (
-            <div className="flex-1 max-w-md">
-              <Label className="block text-sm font-medium mb-2">Search Products</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="Search by title or tags..."
-                  value={productSearchTerm}
-                  onChange={(e) => setProductSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Products Table */}
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product Details</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Product Tags</TableHead>
-                  <TableHead>Order Tags</TableHead>
-                  <TableHead>Store</TableHead>
-                  <TableHead>Actions</TableHead>
-                  <TableHead>Last Updated</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoadingProducts ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      <div className="flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                        <span className="ml-3">Loading products...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredProducts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      <div className="text-center">
-                        <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Found</h3>
-                        <p className="text-gray-600">
-                          {storeProducts.length === 0
-                            ? "Select a store and add tag filters to fetch products"
-                            : "Try adjusting your search terms or tag filters"}
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredProducts.map((product) => (
-                    <TableRow key={product.id} className="hover:bg-gray-50">
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium">{product.title}</div>
-                          {product.variantTitle && (
-                            <div className="text-sm text-gray-500">{product.variantTitle}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-mono">${product.price}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {product.tags.map((tag, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {product.orderTags.map((tag, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>{product.storeDomain}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => savedProductIds.has(product.id) 
-                            ? removeSavedProduct(savedProducts.find(p => p.productId === product.id)!)
-                            : saveProduct(product)
-                          }
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          {savedProductIds.has(product.id) ? (
-                            <BookmarkCheck className="w-4 h-4" />
-                          ) : (
-                            <Bookmark className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                      <TableCell>{new Date(product.updatedAt).toLocaleDateString()}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Saved Products Section */}
-          <div className="mt-8">
-            <Collapsible open={!savedProductsCollapsed} onOpenChange={setSavedProductsCollapsed}>
-              <Card>
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <BookmarkCheck className="w-5 h-5" />
-                        <CardTitle>
-                          Saved Products ({savedProducts.length})
-                        </CardTitle>
-                      </div>
-                      {savedProductsCollapsed ? (
-                        <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ChevronUp className="w-4 h-4" />
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Your saved products for quick access
-                    </p>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="space-y-6">
-                    {/* Search Bar */}
-                    <div className="flex-1 max-w-md">
-                      <Label className="block text-sm font-medium mb-2">Search Saved Products</Label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <Input
-                          placeholder="Search by title, tags, or store..."
-                          value={savedProductsSearchTerm}
-                          onChange={(e) => setSavedProductsSearchTerm(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Products Table */}
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Product Details</TableHead>
-                            <TableHead>Price</TableHead>
-                            <TableHead>Product Tags</TableHead>
-                            <TableHead>Order Tags</TableHead>
-                            <TableHead>Store</TableHead>
-                            <TableHead>Actions</TableHead>
-                            <TableHead>Saved Date</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {paginatedSavedProducts.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={7} className="text-center py-8">
-                                {savedProducts.length === 0 ? (
-                                  <div className="text-center">
-                                    <BookmarkCheck className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Saved Products</h3>
-                                    <p className="text-gray-600 mb-4">Save products from the store products above to see them here.</p>
-                                  </div>
-                                ) : (
-                                  <div className="text-center">
-                                    <Search className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Found</h3>
-                                    <p className="text-gray-600">Try adjusting your search terms.</p>
-                                  </div>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            paginatedSavedProducts.map((savedProduct) => (
-                              <TableRow key={savedProduct.id} className="hover:bg-gray-50">
-                                <TableCell>
-                                  <div className="space-y-1">
-                                    <div className="font-medium">{savedProduct.title}</div>
-                                    {savedProduct.variantTitle && (
-                                      <div className="text-sm text-gray-500">{savedProduct.variantTitle}</div>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="font-mono">${savedProduct.price}</div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex flex-wrap gap-1">
-                                    {savedProduct.tags.map((tag, index) => (
-                                      <Badge key={index} variant="outline" className="text-xs">
-                                        {tag}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex flex-wrap gap-1">
-                                    {savedProduct.orderTags.map((tag, index) => (
-                                      <Badge key={index} variant="secondary" className="text-xs">
-                                        {tag}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </TableCell>
-                                <TableCell>{savedProduct.storeDomain}</TableCell>
-                                <TableCell>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => removeSavedProduct(savedProduct)}
-                                    className="text-red-600 hover:text-red-700"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </TableCell>
-                                <TableCell>{new Date(savedProduct.createdAt).toLocaleDateString()}</TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-
-                    {/* Pagination */}
-                    {totalSavedProductsPages > 1 && (
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-600">
-                          Showing {((savedProductsCurrentPage - 1) * savedProductsPerPage) + 1} to{' '}
-                          {Math.min(savedProductsCurrentPage * savedProductsPerPage, filteredSavedProducts.length)} of{' '}
-                          {filteredSavedProducts.length} products
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={goToPreviousSavedProductsPage}
-                            disabled={savedProductsCurrentPage === 1}
-                          >
-                            Previous
-                          </Button>
-                          <div className="flex items-center gap-1">
-                            {Array.from({ length: totalSavedProductsPages }, (_, i) => i + 1).map((page) => (
-                              <Button
-                                key={page}
-                                variant={savedProductsCurrentPage === page ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => goToSavedProductsPage(page)}
-                                className="w-8 h-8 p-0"
-                              >
-                                {page}
-                              </Button>
-                            ))}
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={goToNextSavedProductsPage}
-                            disabled={savedProductsCurrentPage === totalSavedProductsPages}
-                          >
-                            Next
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Driver Info Container */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Driver Information
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Manage driver details including contact information and payment rates
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Add New Driver */}
-          <div className="grid grid-cols-1 sm:grid-cols-6 gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium mb-2">Driver Name</label>
-              <Input
-                value={newDriverName}
-                onChange={(e) => setNewDriverName(e.target.value)}
-                onKeyPress={handleDriverKeyPress}
-                placeholder="Enter driver name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Paynow Number</label>
-              <Input
-                value={newPaynowNumber}
-                onChange={(e) => setNewPaynowNumber(e.target.value)}
-                onKeyPress={handleDriverKeyPress}
-                placeholder="Enter Paynow number"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Detrack ID</label>
-              <Input
-                value={newDetrackId}
-                onChange={(e) => setNewDetrackId(e.target.value)}
-                onKeyPress={handleDriverKeyPress}
-                placeholder="Enter Detrack ID"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Contact No.</label>
-              <Input
-                value={newContactNo}
-                onChange={(e) => setNewContactNo(e.target.value)}
-                onKeyPress={handleDriverKeyPress}
-                placeholder="Enter Contact No."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Price Per Drop</label>
-              <Input
-                value={newPricePerDrop}
-                onChange={(e) => setNewPricePerDrop(e.target.value)}
-                onKeyPress={handleDriverKeyPress}
-                placeholder="Enter Price Per Drop"
-              />
-            </div>
-            <Button 
-              onClick={addDriverInfo} 
-              disabled={!newDriverName.trim() || !newPaynowNumber.trim() || !newDetrackId.trim() || !newContactNo.trim() || !newPricePerDrop.trim()}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Driver
-            </Button>
-          </div>
-
-          {/* CSV Import Section */}
-          <Card className="bg-gray-50 border-dashed">
-            <CardContent className="p-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium mb-2">Import CSV</label>
-                  <p className="text-xs text-gray-600 mb-2">
-                    Upload a CSV file with "Driver Name", "Paynow Number", "Detrack ID", "Contact No.", and "Price Per Drop" columns
-                  </p>
-                  <input
-                    ref={driverFileInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleDriverCSVImport}
-                    className="hidden"
+            {/* Search Bar */}
+            {sortedFetchedProducts.length > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Search fetched products..."
+                    value={fetchedProductsSearchTerm}
+                    onChange={(e) => setFetchedProductsSearchTerm(e.target.value)}
+                    className="pl-10"
                   />
+                </div>
+                <p className="text-sm text-gray-500">
+                  {filteredFetchedProducts.length} of {sortedFetchedProducts.length} products
+                </p>
+              </div>
+            )}
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <Table className="min-w-full text-sm border rounded-lg overflow-hidden">
+                <TableHeader>
+                  <TableRow className="bg-gray-50 border-b">
+                    <TableHead className="w-[50px] px-4 py-3">
+                      <Checkbox 
+                        className="mt-1"
+                        checked={paginatedFetchedProducts.length > 0 && 
+                          paginatedFetchedProducts.every(p => selectedFetched.has(p.id))}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedFetched(new Set([...selectedFetched, ...paginatedFetchedProducts.map(p => p.id)]));
+                          } else {
+                            const newSelected = new Set(selectedFetched);
+                            paginatedFetchedProducts.forEach(p => newSelected.delete(p.id));
+                            setSelectedFetched(newSelected);
+                          }
+                        }}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[300px] px-4 py-3 font-medium text-gray-700">Title</TableHead>
+                    <TableHead className="w-[200px] px-4 py-3 font-medium text-gray-700">Variant</TableHead>
+                    <TableHead className="min-w-[300px] px-4 py-3 font-medium text-gray-700">Tags</TableHead>
+                    <TableHead className="w-[100px] px-4 py-3 font-medium text-gray-700 text-right">Price</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedFetchedProducts.map((product) => (
+                    <TableRow key={product.id} className="border-b hover:bg-gray-50 transition-colors">
+                      <TableCell className="align-top px-4 py-3">
+                        <Checkbox
+                          className="mt-1"
+                          checked={selectedFetched.has(product.id)}
+                          onCheckedChange={(checked) => {
+                            const newSelected = new Set(selectedFetched);
+                            if (checked) {
+                              newSelected.add(product.id);
+                            } else {
+                              newSelected.delete(product.id);
+                            }
+                            setSelectedFetched(newSelected);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className="align-top px-4 py-3">
+                        <div className="space-y-1">
+                          <div className="font-medium text-gray-900" title={product.title}>
+                            {product.title}
+                          </div>
+                          {product.handle && (
+                            <div className="text-xs text-gray-500 font-mono">
+                              /{product.handle}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-top px-4 py-3">
+                        <div className="text-sm text-gray-600">
+                          {product.variants?.[0]?.title || 'Default'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-top px-4 py-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {product.tags.map((tag: string, i: number) => (
+                            <Badge key={i} variant="secondary" className="text-xs whitespace-nowrap font-medium">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-top px-4 py-3 text-right">
+                        <div className="font-medium text-gray-900">
+                          ${Number(product.variants?.[0]?.price || 0).toFixed(2)}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {paginatedFetchedProducts.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-32 text-center">
+                        {fetching ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                            <span className="text-gray-600">Fetching products...</span>
+                          </div>
+                        ) : (
+                          <div className="text-gray-500">
+                            No products found. Try adjusting your tag filter.
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Pagination */}
+            {totalFetchedPages > 1 && (
+              <div className="flex items-center justify-between px-2">
+                <div className="text-sm text-gray-600">
+                  Page {fetchedProductsPage} of {totalFetchedPages}
+                </div>
+                <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => driverFileInputRef.current?.click()}
-                    className="text-sm"
+                    size="sm"
+                    onClick={() => setFetchedProductsPage(p => Math.max(1, p - 1))}
+                    disabled={fetchedProductsPage === 1}
                   >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Choose CSV File
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFetchedProductsPage(p => Math.min(totalFetchedPages, p + 1))}
+                    disabled={fetchedProductsPage === totalFetchedPages}
+                  >
+                    Next
                   </Button>
                 </div>
-                <div className="text-xs text-gray-600 bg-white p-3 rounded border">
-                  <p className="font-medium mb-1">CSV Format:</p>
-                  <p>Driver Name,Paynow Number,Detrack ID,Contact No.,Price Per Drop</p>
-                  <p>John Doe,91234567,D12345,1234567890,10</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sync Progress Indicator */}
+      {isSyncing && syncStatus && (
+        <div className="my-4 flex items-center gap-2">
+          <span className="text-sm text-blue-600 font-medium">
+            Syncing products... {syncStatus.total_products || 0} fetched so far
+          </span>
+          <div className="w-32 h-2 bg-gray-200 rounded overflow-hidden">
+            <div className="h-2 bg-blue-500" style={{ width: `${Math.min(syncStatus.total_products / 10, 100)}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* Saved Products Section */}
+      <Card className="max-w-7xl mx-auto">
+        <CardHeader className="border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookmarkCheck className="w-5 h-5" />
+              <div>
+                <CardTitle>Saved Products</CardTitle>
+                <CardDescription>
+                  Manage your saved products with advanced filtering and bulk operations
+                </CardDescription>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <Collapsible open={!savedProductsCollapsed} onOpenChange={(open) => setSavedProductsCollapsed(!open)}>
+          <div className="flex justify-end px-6 py-2 border-b">
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                {savedProductsCollapsed ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent>
+            <CardContent className="space-y-6 pt-6">
+              {/* Search and Filter */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Input
+                    placeholder="Search saved products..."
+                    value={savedProductsSearchTerm}
+                    onChange={(e) => setSavedProductsSearchTerm(e.target.value)}
+                    className="max-w-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Label for selected products"
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    className="w-[200px]"
+                  />
+                  <Button 
+                    onClick={handleBulkApplyLabel}
+                    disabled={selectedProducts.size === 0 || !newLabel.trim()}
+                    size="sm"
+                  >
+                    Apply Label
+                  </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Search and Bulk Actions */}
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex-1 max-w-md">
-              <label className="block text-sm font-medium mb-2">Search</label>
+              {/* Status Bar */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  {savedProducts.length} products saved for this store
+                </p>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">{selectedProducts.size}</span> selected
+                  </div>
+                  <Button 
+                    onClick={handleBulkDeleteProducts} 
+                    disabled={selectedProducts.size === 0}
+                    size="sm"
+                    variant="destructive"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Selected ({selectedProducts.size})
+                  </Button>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <Table className="min-w-full text-sm border rounded-lg overflow-hidden">
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 border-b">
+                      <TableHead className="w-[50px] px-4 py-3">
+                        <Checkbox 
+                          className="mt-1"
+                          checked={paginatedSavedProducts.length > 0 && 
+                            paginatedSavedProducts.every(p => selectedProducts.has(p.id))}
+                          onCheckedChange={toggleSelectAllProductsOnPage}
+                        />
+                      </TableHead>
+                      <TableHead className="w-[300px] px-4 py-3 font-medium text-gray-700">Title</TableHead>
+                      <TableHead className="w-[200px] px-4 py-3 font-medium text-gray-700">Variant</TableHead>
+                      <TableHead className="min-w-[200px] px-4 py-3 font-medium text-gray-700">Tags</TableHead>
+                      <TableHead className="w-[150px] px-4 py-3 font-medium text-gray-700">Label</TableHead>
+                      <TableHead className="w-[100px] px-4 py-3 font-medium text-gray-700 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedSavedProducts.map((product) => (
+                      <TableRow key={product.id} className="border-b hover:bg-gray-50 transition-colors">
+                        <TableCell className="align-top px-4 py-3">
+                          <Checkbox
+                            className="mt-1"
+                            checked={selectedProducts.has(product.id)}
+                            onCheckedChange={(checked) => {
+                              const newSelected = new Set(selectedProducts);
+                              if (checked) {
+                                newSelected.add(product.id);
+                              } else {
+                                newSelected.delete(product.id);
+                              }
+                              setSelectedProducts(newSelected);
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="align-top px-4 py-3">
+                          <div className="space-y-1">
+                            <div className="font-medium text-gray-900" title={product.title}>
+                              {product.title}
+                            </div>
+                            {product.handle && (
+                              <div className="text-xs text-gray-500 font-mono">
+                                /{product.handle}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top px-4 py-3">
+                          <div className="text-sm text-gray-600">
+                            {product.variantTitle || 'Default'}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top px-4 py-3">
+                          <div className="flex flex-wrap gap-1.5">
+                            {product.tags.map((tag: string, i: number) => (
+                              <Badge key={i} variant="secondary" className="text-xs whitespace-nowrap font-medium">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top px-4 py-3">
+                          {product.label ? (
+                            <Badge variant="outline" className="font-medium">
+                              {product.label}
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400 text-sm">No label</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="align-top px-4 py-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteProduct(product.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {paginatedSavedProducts.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-32 text-center">
+                          <div className="text-gray-500">
+                            No saved products found.
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {savedProducts.length > 0 && (
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
+                    Showing {((savedProductsCurrentPage - 1) * savedProductsPerPage) + 1} to {Math.min(savedProductsCurrentPage * savedProductsPerPage, filteredSavedProducts.length)} of {filteredSavedProducts.length} products
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToPreviousSavedProductsPage}
+                      disabled={savedProductsCurrentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToNextSavedProductsPage}
+                      disabled={savedProductsCurrentPage >= totalSavedProductsPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
+
+      {/* Driver's Information */}
+      <Card className="max-w-7xl mx-auto">
+        <CardHeader className="border-b">
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            Driver's Information
+          </CardTitle>
+          <CardDescription>
+            Manage driver details including PayNow numbers and contact information
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 pt-6">
+          {/* Search and Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   placeholder="Search drivers..."
                   value={driverSearchTerm}
                   onChange={(e) => setDriverSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 w-64"
                 />
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={selectedDrivers.size === filteredDriverInfos.length && filteredDriverInfos.length > 0}
-                  onCheckedChange={selectAllDrivers}
-                />
-                <span className="text-sm text-gray-600">
-                  Select All ({selectedDrivers.size} selected)
-                </span>
-              </div>
-              {selectedDrivers.size > 0 && (
-                <Button
-                  variant="outline"
-                  onClick={deleteSelectedDrivers}
-                  className="text-red-600 hover:text-red-700"
-                  size="sm"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Selected ({selectedDrivers.size})
+              <input
+                type="file"
+                ref={driverFileInputRef}
+                onChange={handleDriverCSVImport}
+                accept=".csv"
+                className="hidden"
+              />
+              <Button onClick={() => driverFileInputRef.current?.click()} variant="outline" size="sm">
+                <Upload className="w-4 h-4 mr-2" />
+                Import CSV
+              </Button>
+              {driverInfos.length > 0 && (
+                <Button onClick={exportDriverInfoCSV} variant="outline" size="sm">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export CSV
                 </Button>
               )}
+            </div>
+          </div>
+
+          {/* Add New Driver */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-sm font-medium mb-3">Add New Driver</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+              <Input
+                placeholder="Driver Name"
+                value={newDriverName}
+                onChange={(e) => setNewDriverName(e.target.value)}
+                onKeyPress={handleDriverKeyPress}
+              />
+              <Input
+                placeholder="PayNow Number"
+                value={newPaynowNumber}
+                onChange={(e) => setNewPaynowNumber(e.target.value)}
+                onKeyPress={handleDriverKeyPress}
+              />
+              <Input
+                placeholder="Detrack ID"
+                value={newDetrackId}
+                onChange={(e) => setNewDetrackId(e.target.value)}
+                onKeyPress={handleDriverKeyPress}
+              />
+              <Input
+                placeholder="Contact No"
+                value={newContactNo}
+                onChange={(e) => setNewContactNo(e.target.value)}
+                onKeyPress={handleDriverKeyPress}
+              />
+              <Input
+                placeholder="Price Per Drop"
+                value={newPricePerDrop}
+                onChange={(e) => setNewPricePerDrop(e.target.value)}
+                onKeyPress={handleDriverKeyPress}
+              />
+              <Button onClick={addDriverInfo} disabled={!newDriverName.trim()}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Driver
+              </Button>
             </div>
           </div>
 
           {/* Drivers Table */}
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-full text-sm border rounded-lg overflow-hidden">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedDrivers.size === filteredDriverInfos.length && filteredDriverInfos.length > 0}
-                      onCheckedChange={selectAllDrivers}
+                <TableRow className="bg-gray-50 border-b">
+                  <TableHead className="w-[50px] px-4 py-3">
+                    <Checkbox 
+                      className="mt-1"
+                      checked={filteredDriverInfos.length > 0 && 
+                        filteredDriverInfos.every(d => selectedDrivers.has(d.id))}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedDrivers(new Set(filteredDriverInfos.map(d => d.id)));
+                        } else {
+                          setSelectedDrivers(new Set());
+                        }
+                      }}
                     />
                   </TableHead>
-                  <TableHead>Driver Name</TableHead>
-                  <TableHead>Paynow Number</TableHead>
-                  <TableHead>Detrack ID</TableHead>
-                  <TableHead>Contact No.</TableHead>
-                  <TableHead>Price Per Drop</TableHead>
-                  <TableHead className="w-24">Actions</TableHead>
+                  <TableHead className="px-4 py-3 font-medium text-gray-700">Driver Name</TableHead>
+                  <TableHead className="px-4 py-3 font-medium text-gray-700">PayNow Number</TableHead>
+                  <TableHead className="px-4 py-3 font-medium text-gray-700">Detrack ID</TableHead>
+                  <TableHead className="px-4 py-3 font-medium text-gray-700">Contact No</TableHead>
+                  <TableHead className="px-4 py-3 font-medium text-gray-700">Price Per Drop</TableHead>
+                  <TableHead className="w-[100px] px-4 py-3 font-medium text-gray-700 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDriverInfos.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      {driverInfos.length === 0 ? (
-                        <div className="text-center">
-                          <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Driver Information</h3>
-                          <p className="text-gray-600 mb-4">Add your first driver to get started.</p>
-                        </div>
+                {filteredDriverInfos.map((driver) => (
+                  <TableRow key={driver.id} className="border-b hover:bg-gray-50 transition-colors">
+                    <TableCell className="px-4 py-3">
+                      <Checkbox
+                        className="mt-1"
+                        checked={selectedDrivers.has(driver.id)}
+                        onCheckedChange={(checked) => {
+                          const newSelected = new Set(selectedDrivers);
+                          if (checked) {
+                            newSelected.add(driver.id);
+                          } else {
+                            newSelected.delete(driver.id);
+                          }
+                          setSelectedDrivers(newSelected);
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      {editingDriverId === driver.id ? (
+                        <Input
+                          value={editingDriverName}
+                          onChange={(e) => setEditingDriverName(e.target.value)}
+                          className="w-full"
+                        />
                       ) : (
-                        <div className="text-center">
-                          <Search className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Drivers Found</h3>
-                          <p className="text-gray-600">Try adjusting your search terms.</p>
-                        </div>
+                        <div className="font-medium text-gray-900">{driver.driverName}</div>
                       )}
                     </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredDriverInfos.map((driver) => (
-                    <TableRow key={driver.id} className="hover:bg-gray-50">
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedDrivers.has(driver.id)}
-                          onCheckedChange={() => toggleDriverSelection(driver.id)}
+                    <TableCell className="px-4 py-3">
+                      {editingDriverId === driver.id ? (
+                        <Input
+                          value={editingPaynowNumber}
+                          onChange={(e) => setEditingPaynowNumber(e.target.value)}
+                          className="w-full"
                         />
-                      </TableCell>
-                      <TableCell>
+                      ) : (
+                        <div className="text-gray-600 font-mono">{driver.paynowNumber}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      {editingDriverId === driver.id ? (
+                        <Input
+                          value={editingDetrackId}
+                          onChange={(e) => setEditingDetrackId(e.target.value)}
+                          className="w-full"
+                        />
+                      ) : (
+                        <div className="text-gray-600">{driver.detrackId}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      {editingDriverId === driver.id ? (
+                        <Input
+                          value={editingContactNo}
+                          onChange={(e) => setEditingContactNo(e.target.value)}
+                          className="w-full"
+                        />
+                      ) : (
+                        <div className="text-gray-600">{driver.contactNo}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      {editingDriverId === driver.id ? (
+                        <Input
+                          value={editingPricePerDrop}
+                          onChange={(e) => setEditingPricePerDrop(e.target.value)}
+                          className="w-full"
+                        />
+                      ) : (
+                        <div className="text-gray-600">${driver.pricePerDrop}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
                         {editingDriverId === driver.id ? (
-                          <Input
-                            value={editingDriverName}
-                            onChange={(e) => setEditingDriverName(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && saveDriverEdit()}
-                            onBlur={saveDriverEdit}
-                            autoFocus
-                          />
-                        ) : (
-                          <div 
-                            className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors"
-                            onClick={() => startEditingDriver(driver)}
-                          >
-                            {driver.driverName}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingDriverId === driver.id ? (
-                          <Input
-                            value={editingPaynowNumber}
-                            onChange={(e) => setEditingPaynowNumber(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && saveDriverEdit()}
-                            onBlur={saveDriverEdit}
-                          />
-                        ) : (
-                          <div 
-                            className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors font-mono"
-                            onClick={() => startEditingDriver(driver)}
-                          >
-                            {driver.paynowNumber}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingDriverId === driver.id ? (
-                          <Input
-                            value={editingDetrackId}
-                            onChange={(e) => setEditingDetrackId(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && saveDriverEdit()}
-                            onBlur={saveDriverEdit}
-                          />
-                        ) : (
-                          <div 
-                            className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors font-mono"
-                            onClick={() => startEditingDriver(driver)}
-                          >
-                            {driver.detrackId}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingDriverId === driver.id ? (
-                          <Input
-                            value={editingContactNo}
-                            onChange={(e) => setEditingContactNo(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && saveDriverEdit()}
-                            onBlur={saveDriverEdit}
-                          />
-                        ) : (
-                          <div 
-                            className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors font-mono"
-                            onClick={() => startEditingDriver(driver)}
-                          >
-                            {driver.contactNo}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingDriverId === driver.id ? (
-                          <Input
-                            value={editingPricePerDrop}
-                            onChange={(e) => setEditingPricePerDrop(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && saveDriverEdit()}
-                            onBlur={saveDriverEdit}
-                          />
-                        ) : (
-                          <div 
-                            className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors"
-                            onClick={() => startEditingDriver(driver)}
-                          >
-                            ${driver.pricePerDrop}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingDriverId === driver.id ? (
-                          <div className="flex gap-1">
-                            <Button size="sm" onClick={saveDriverEdit}>
-                              <Save className="w-3 h-3 mr-1" />
-                              Save
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={cancelEdit}>
-                              <X className="w-3 h-3 mr-1" />
-                              Cancel
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-1">
+                          <>
                             <Button
-                              variant="outline"
+                              variant="ghost"
+                              size="sm"
+                              onClick={saveDriverEdit}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            >
+                              <Save className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelEdit}
+                              className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={() => startEditingDriver(driver)}
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                             >
-                              <Edit className="w-3 h-3 mr-1" />
-                              Edit
+                              <Edit className="w-4 h-4" />
                             </Button>
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
                               onClick={() => removeDriverInfo(driver.id)}
-                              className="text-red-600 hover:text-red-700"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             >
-                              <Trash2 className="w-3 h-3 mr-1" />
-                              Remove
+                              <Trash2 className="w-4 h-4" />
                             </Button>
-                          </div>
+                          </>
                         )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredDriverInfos.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-32 text-center">
+                      <div className="text-gray-500">
+                        No drivers found. Add some drivers to get started.
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
+
+          {/* Bulk Actions */}
+          {selectedDrivers.size > 0 && (
+            <div className="flex items-center justify-between bg-blue-50 rounded-lg p-4">
+              <div className="text-sm text-blue-700">
+                <span className="font-medium">{selectedDrivers.size}</span> driver(s) selected
+              </div>
+              <Button 
+                onClick={deleteSelectedDrivers} 
+                variant="destructive" 
+                size="sm"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

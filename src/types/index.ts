@@ -278,6 +278,8 @@ export interface SavedProduct {
   storeDomain: string;
   userId: string;
   createdAt: string;
+  image_url?: string;
+  label?: string;
 }
 
 export interface TagFilter {
@@ -287,8 +289,22 @@ export interface TagFilter {
   createdAt: string;
 }
 
+export interface TitleFilter {
+  id: string;
+  title: string;
+  store_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 export interface ProductLabel {
   id: string;
   productName: string;
   label: string;
+}
+
+export interface SyncStatus {
+  last_sync: string | null;
+  total_products: number;
+  last_sync_status: 'success' | 'error' | null;
 }

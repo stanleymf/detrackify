@@ -1,9 +1,18 @@
-import type { ShopifyOrder } from '@/types/shopify'
+import type { 
+  User, 
+  Store, 
+  Order, 
+  TagFilter, 
+  SavedProduct, 
+  TitleFilter, 
+  SyncStatus 
+} from '../types'
+import type { ShopifyProduct } from '../types/shopify'
 import type { GlobalFieldMapping, ExtractProcessingMapping } from '@/types'
 
 // Helper function to generate UUID using Web Crypto API
 function generateUUID(): string {
-  return crypto.randomUUID()
+  return globalThis.crypto.randomUUID()
 }
 
 export interface D1Database {
@@ -28,45 +37,18 @@ export interface D1Result<T = any> {
   meta: any
 }
 
-export interface Store {
-  id: string
-  shopify_domain: string
-  access_token: string
-  api_version: string
-  webhook_secret: string
-  api_secret?: string
-  store_name: string
-  created_at: string
-  updated_at: string
-}
-
-export interface Order {
-  id: string
-  store_id: string
-  shopify_order_id: number
-  shopify_order_name: string
-  status: 'Ready for Export' | 'Exported' | 'Error'
-  processed_data: string
-  raw_shopify_data: string
-  created_at: string
-  updated_at: string
-  exported_at: string | null
-}
-
-export interface User {
-  id: string
-  email: string
-  password_hash: string
-  created_at: string
-  updated_at: string
-}
-
 export interface UserSession {
   id: string
   user_id: string
   session_token: string
   expires_at: string
   created_at: string
+}
+
+export interface SyncStatus {
+  last_sync: string | null
+  total_products: number
+  last_sync_status: string | null
 }
 
 export class DatabaseService {
@@ -736,10 +718,26 @@ export class DatabaseService {
   }
 
   async deleteTagFilter(filterId: string, userId: string): Promise<void> {
-    await this.db.prepare(`
-      DELETE FROM tag_filters 
-      WHERE id = ? AND user_id = ?
-    `).bind(filterId, userId).run()
+    await this.db.prepare('DELETE FROM tag_filters WHERE id = ? AND user_id = ?').bind(filterId, userId).run()
+  }
+
+  async getTitleFiltersForUser(userId: string, storeId: string): Promise<TitleFilter[]> {
+    const result = await this.db.prepare(
+      'SELECT * FROM title_filters WHERE user_id = ? AND store_id = ? ORDER BY created_at DESC'
+    ).bind(userId, storeId).all();
+    return result.results as TitleFilter[];
+  }
+
+  async saveTitleFilter(userId: string, storeId: string, title: string): Promise<string> {
+    const titleFilterId = generateUUID();
+    await this.db.prepare(
+      'INSERT INTO title_filters (id, title, store_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind(titleFilterId, title, storeId, userId, new Date().toISOString()).run();
+    return titleFilterId;
+  }
+
+  async deleteTitleFilter(titleFilterId: string): Promise<void> {
+    await this.db.prepare('DELETE FROM title_filters WHERE id = ?').bind(titleFilterId).run();
   }
 
   // Saved Products Management
@@ -775,20 +773,7 @@ export class DatabaseService {
     await this.db.prepare(`
       INSERT INTO saved_products (id, product_id, title, variant_title, price, handle, tags, order_tags, store_id, store_domain, user_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      product.id, 
-      product.productId, 
-      product.title, 
-      product.variantTitle, 
-      product.price, 
-      product.handle, 
-      product.tags, 
-      product.orderTags, 
-      product.storeId, 
-      product.storeDomain, 
-      product.userId, 
-      product.createdAt
-    ).run()
+    `).bind(product.id, product.productId, product.title, product.variantTitle, product.price, product.handle, product.tags, product.orderTags, product.storeId, product.storeDomain, product.userId, product.createdAt).run()
   }
 
   async deleteSavedProduct(productId: string, userId: string): Promise<void> {
@@ -805,5 +790,127 @@ export class DatabaseService {
     `).bind(productId, userId).first<{count: number}>()
     
     return result ? result.count > 0 : false
+  }
+
+  async getSyncStatus(userId: string, storeId: string): Promise<SyncStatus> {
+    const result = await this.db.prepare(
+      'SELECT last_sync, total_products, last_sync_status FROM sync_status WHERE user_id = ? AND store_id = ?'
+    ).bind(userId, storeId).first();
+    
+    if (!result) {
+      return {
+        last_sync: null,
+        total_products: 0,
+        last_sync_status: null
+      };
+    }
+    
+    return {
+      last_sync: result.last_sync,
+      total_products: result.total_products || 0,
+      last_sync_status: result.last_sync_status
+    };
+  }
+
+  async updateSyncStatus(userId: string, storeId: string, status: Partial<SyncStatus>): Promise<void> {
+    const existing = await this.getSyncStatus(userId, storeId);
+    
+    if (existing.last_sync === null) {
+      // Insert new record
+      await this.db.prepare(
+        'INSERT INTO sync_status (user_id, store_id, last_sync, total_products, last_sync_status) VALUES (?, ?, ?, ?, ?)'
+      ).bind(
+        userId, 
+        storeId, 
+        status.last_sync || new Date().toISOString(),
+        status.total_products || 0,
+        status.last_sync_status || 'success'
+      ).run();
+    } else {
+      // Update existing record
+      await this.db.prepare(
+        'UPDATE sync_status SET last_sync = ?, total_products = ?, last_sync_status = ? WHERE user_id = ? AND store_id = ?'
+      ).bind(
+        status.last_sync || existing.last_sync,
+        status.total_products !== undefined ? status.total_products : existing.total_products,
+        status.last_sync_status || existing.last_sync_status,
+        userId,
+        storeId
+      ).run();
+    }
+  }
+
+  async saveAllProducts(userId: string, storeId: string, storeDomain: string, products: ShopifyProduct[]): Promise<void> {
+    // Fetch all existing products for this user/store
+    const existingRows = await this.db.prepare(
+      'SELECT product_id, updated_at FROM saved_products WHERE user_id = ? AND store_id = ?'
+    ).bind(userId, storeId).all<any>();
+    const existingMap = new Map<string, string>();
+    for (const row of existingRows.results || []) {
+      existingMap.set(row.product_id, row.updated_at);
+    }
+    const statements: any[] = [];
+    for (const product of products) {
+      try {
+        console.log(`[saveAllProducts] Processing product: id=${product.id}, title=${product.title}, updated_at=${product.updated_at}`);
+        const existingUpdatedAt = existingMap.get(product.id.toString());
+        if (existingUpdatedAt && existingUpdatedAt === product.updated_at) {
+          console.log(`[saveAllProducts] Skipping unchanged product: id=${product.id}`);
+          continue;
+        }
+        const savedProductId = generateUUID();
+        if (existingUpdatedAt) {
+          console.log(`[saveAllProducts] Updating product: id=${product.id}`);
+          statements.push(
+            this.db.prepare(
+              'UPDATE saved_products SET title = ?, variant_title = ?, price = ?, handle = ?, tags = ?, order_tags = ?, store_domain = ?, updated_at = ?, created_at = ? WHERE user_id = ? AND store_id = ? AND product_id = ?'
+            ).bind(
+              product.title,
+              product.variants[0]?.title || '',
+              product.variants[0]?.price || '0',
+              product.handle,
+              product.tags,
+              '', // order_tags
+              storeDomain,
+              product.updated_at,
+              new Date().toISOString(),
+              userId,
+              storeId,
+              product.id.toString()
+            )
+          );
+        } else {
+          console.log(`[saveAllProducts] Inserting new product: id=${product.id}`);
+          statements.push(
+            this.db.prepare(
+              'INSERT INTO saved_products (id, product_id, title, variant_title, price, handle, tags, order_tags, store_id, store_domain, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            ).bind(
+              savedProductId,
+              product.id.toString(),
+              product.title,
+              product.variants[0]?.title || '',
+              product.variants[0]?.price || '0',
+              product.handle,
+              product.tags,
+              '', // order_tags
+              storeId,
+              storeDomain,
+              userId,
+              new Date().toISOString(),
+              product.updated_at
+            )
+          );
+        }
+      } catch (err) {
+        console.error(`[saveAllProducts] Error processing product id=${product.id}:`, err && err.message);
+        if (err && err.stack) console.error('[saveAllProducts] Stack:', err.stack);
+      }
+    }
+    // Batch execute in chunks of 50
+    for (let i = 0; i < statements.length; i += 50) {
+      const chunk = statements.slice(i, i + 50);
+      console.log(`[saveAllProducts] Executing batch ${i / 50 + 1} (${chunk.length} statements)`);
+      await this.db.batch(chunk);
+    }
   }
 } 

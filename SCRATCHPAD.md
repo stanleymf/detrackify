@@ -1,5 +1,69 @@
 # Detrackify Scratchpad
 
+## Recent Updates (v0.9.0)
+
+### ✅ Completed Features
+
+#### Enhanced Tag Filtering System
+- **Substring Matching**: Changed from exact tag matching to substring matching for more flexible product filtering
+- **Improved Search Accuracy**: Products with multi-word tags like "Condolences Stand" now match correctly
+- **Debug Logging**: Added comprehensive console logging for tag filtering operations to aid troubleshooting
+- **API Route Optimization**: Enhanced tag filtering logic in handleFetchStoreProducts function
+
+#### Collapsible UI Component Fixes
+- **Component Hierarchy**: Fixed Radix UI Collapsible component nesting to prevent "white screen of death" errors
+- **Saved Products Section**: Improved UI structure with proper Collapsible component implementation
+- **Error Resolution**: Resolved "CollapsibleTrigger must be used within Collapsible" error
+- **UI Rendering**: Fixed component hierarchy issues that prevented proper UI rendering
+
+#### Technical Improvements
+- **Tag Matching Algorithm**: Enhanced filtering to match partial tag names and multi-word tags
+- **API Route Priority**: Ensured correct route handling for product filtering endpoints
+- **Debug Capabilities**: Added detailed logging for troubleshooting tag filtering issues
+- **Component Architecture**: Improved overall component structure and nesting
+
+### 🔧 Technical Implementation
+
+#### Enhanced Tag Filtering Logic
+```typescript
+// Before: Exact matching
+const hasMatchingTag = tags.some((tag: string) => 
+  productTags.includes(tag.trim().toLowerCase())
+);
+
+// After: Substring matching
+const inputTags = tags.map((tag: string) => tag.trim().toLowerCase());
+const hasMatchingTag = inputTags.some(inputTag =>
+  productTags.some(productTag => productTag.includes(inputTag))
+);
+```
+
+#### Debug Logging Implementation
+```typescript
+// Debug logging for tag filtering
+console.log(`[TagFilter] Product: ${product.title}, ProductTags:`, productTags, 'InputTags:', inputTags);
+console.log(`[TagFilter] Has matching tag:`, hasMatchingTag);
+```
+
+#### Collapsible Component Fix
+```typescript
+// Fixed component hierarchy
+<Collapsible open={!savedProductsCollapsed} onOpenChange={(open) => setSavedProductsCollapsed(!open)}>
+  <div className="flex justify-end px-6 py-2 border-b">
+    <CollapsibleTrigger asChild>
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+        {savedProductsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+      </Button>
+    </CollapsibleTrigger>
+  </div>
+  <CollapsibleContent>
+    <CardContent className="space-y-6 pt-6">
+      {/* Content */}
+    </CardContent>
+  </CollapsibleContent>
+</Collapsible>
+```
+
 ## Recent Updates (v0.6.0)
 
 ### ✅ Completed Features
@@ -163,6 +227,12 @@ const flowerStandOrders = filteredOrders.filter(order => {
   2. Fetch the product and read its `tags`.
   3. Optionally, cache product tags locally to avoid repeated lookups.
 - Useful for filtering, analytics, or custom logic based on product tags in orders.
+
+### Smart Sync & Saved Products Table
+- The saved_products table is now created via migration and matches backend expectations.
+- An updated_at column was added to track Shopify product updates.
+- The saveAllProducts function now performs a smart sync: it skips products that are unchanged (same updated_at) and updates those that have changed.
+- This ensures efficient syncing and prevents unnecessary DB writes.
 
 ---
 
