@@ -156,6 +156,26 @@ async function handleApiRoutes(
 		return handleTestDetrackConnection(db)
 	}
 
+	if (path === '/api/detrack/test-simple' && request.method === 'POST') {
+		return handleTestDetrackSimple(db)
+	}
+
+	if (path === '/api/detrack/test-date' && request.method === 'POST') {
+		return handleTestDetrackDate(db)
+	}
+
+	if (path === '/api/detrack/test-v1' && request.method === 'POST') {
+		return handleTestDetrackV1(db)
+	}
+
+	if (path === '/api/detrack/test-v2-alt' && request.method === 'POST') {
+		return handleTestDetrackV2Alt(db)
+	}
+
+	if (path === '/api/detrack/test-auth' && request.method === 'POST') {
+		return handleTestDetrackAuth(db)
+	}
+
 	if (path === '/api/detrack/update-key' && request.method === 'POST') {
 		return handleUpdateDetrackApiKey(db)
 	}
@@ -1063,7 +1083,7 @@ async function handleFetchOrders(request: Request, db: DatabaseService): Promise
 		])
 		console.log(`Loaded ${globalMappings.length} global mappings and ${extractMappings.length} extract mappings`)
 		
-		const results: any[] = []
+		const results: Array<{ orderId: string, success: boolean, error?: string, detrackResponse?: any }> = []
 		
 		for (const store of stores) {
 			console.log(`Processing store: ${store.store_name} (${store.shopify_domain})`)
@@ -1409,61 +1429,48 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 		// Get all orders from database to find the ones we need to export
 		const allOrders = await db.getAllOrders(1000, 0) // Get all orders
 		console.log(`Found ${allOrders.length} total orders in database`)
-		
-		const results: Array<{ orderId: string, success: boolean, error?: string, detrackResponse?: string }> = []
+
+		const jobs = []
+		const exportResults: Array<{ orderId: string, success: boolean, error?: string, detrackResponse?: any }> = []
 		let successCount = 0
 		let errorCount = 0
-		
+
 		for (const lineItemId of orderIds) {
 			try {
 				console.log(`\n--- Processing line item ${lineItemId} for Detrack export ---`)
-				
-				// Extract base order ID from line item ID (e.g., "90fc9be9-77fa-4550-830d-9853a44942f7-0" -> "90fc9be9-77fa-4550-830d-9853a44942f7")
 				const baseOrderId = lineItemId.split('-').slice(0, -1).join('-')
 				console.log(`Looking for base order ID: ${baseOrderId}`)
-				
-				// Find the order in our list
 				const order = allOrders.find(o => o.id === baseOrderId)
 				if (!order) {
 					console.error(`Order ${baseOrderId} not found in database`)
-					results.push({ orderId: lineItemId, success: false, error: 'Order not found' })
+					exportResults.push({ orderId: lineItemId, success: false, error: 'Order not found' })
 					errorCount++
 					continue
 				}
-				
-				console.log(`Order found: ${order.shopify_order_name}, Status: ${order.status}`)
-				
-				// Parse processed data
 				let processedData: any[]
 				try {
 					processedData = JSON.parse(order.processed_data)
 					console.log(`Processed data parsed successfully, ${processedData.length} items`)
 				} catch (parseError) {
 					console.error(`Failed to parse processed data for order ${baseOrderId}:`, parseError)
-					results.push({ orderId: lineItemId, success: false, error: 'Invalid processed data format' })
+					exportResults.push({ orderId: lineItemId, success: false, error: 'Invalid processed data format' })
 					errorCount++
 					continue
 				}
-				
 				if (!processedData || processedData.length === 0) {
 					console.error(`Order ${baseOrderId} has no processed data`)
-					results.push({ orderId: lineItemId, success: false, error: 'No processed data available' })
+					exportResults.push({ orderId: lineItemId, success: false, error: 'No processed data available' })
 					errorCount++
 					continue
 				}
-				
-				// Extract line item index from the line item ID (e.g., "90fc9be9-77fa-4550-830d-9853a44942f7-0" -> 0)
 				const lineItemIndex = parseInt(lineItemId.split('-').pop() || '0')
 				console.log(`Exporting line item index: ${lineItemIndex}`)
-				
 				if (lineItemIndex >= processedData.length) {
 					console.error(`Line item index ${lineItemIndex} out of range (max: ${processedData.length - 1})`)
-					results.push({ orderId: lineItemId, success: false, error: 'Line item index out of range' })
+					exportResults.push({ orderId: lineItemId, success: false, error: 'Line item index out of range' })
 					errorCount++
 					continue
 				}
-				
-				// Get the specific line item data
 				const lineItemData = processedData[lineItemIndex]
 				console.log(`Line item data:`, {
 					deliveryOrderNo: lineItemData.deliveryOrderNo,
@@ -1471,79 +1478,82 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 					address: lineItemData.address,
 					recipientPhoneNo: lineItemData.recipientPhoneNo
 				})
-				
-				// Convert to Detrack format using dashboard fields directly
+				// Convert to Detrack format (extract the job object from the data array)
 				const payload = convertToDetrackFormat(lineItemData, order.shopify_order_name)
-				console.log('Converted to Detrack format:', payload)
-				
-				// Validate required fields
-				const requiredFields = ['do', 'date', 'address', 'phone', 'recipient_name']
-				const missingFields = requiredFields.filter(field => !payload[field] || payload[field].trim() === '')
-				
-				if (missingFields.length > 0) {
-					console.error(`Missing required fields for Detrack: ${missingFields.join(', ')}`)
-					throw new Error(`Missing required fields: ${missingFields.join(', ')}`)
+				if (payload && payload.data && payload.data[0]) {
+					jobs.push(payload.data[0])
+				} else {
+					exportResults.push({ orderId: lineItemId, success: false, error: 'Failed to convert to Detrack format' })
+					errorCount++
 				}
-				
-				console.log(`Sending to Detrack API: https://app.detrack.com/api/v2/dn/jobs`)
-				console.log(`Using delivery order number: ${payload.do}`)
-				
-				const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'X-API-KEY': detrackConfig.apiKey
-					},
-					body: JSON.stringify(payload)
-				})
-				
-				console.log(`Detrack API response status: ${response.status}`)
-				
-				if (!response.ok) {
-					const errorText = await response.text()
-					console.error(`Detrack API error for order ${lineItemId}:`, response.status, errorText)
-					throw new Error(`Detrack API error: ${response.status} - ${errorText}`)
-				}
-				
-				const detrackResponse = await response.json()
-				console.log(`Detrack API success response for order ${lineItemId}:`, detrackResponse)
-				
-				// Update order status to exported
-				await db.updateOrder(baseOrderId, {
-					status: 'Exported',
-					exported_at: new Date().toISOString(),
-					updated_at: new Date().toISOString()
-				})
-				
-				console.log(`Order ${lineItemId} successfully exported to Detrack`)
-				results.push({ orderId: lineItemId, success: true, detrackResponse: 'Successfully exported to Detrack' })
-				successCount++
-				
 			} catch (error: any) {
-				console.error(`Error exporting order ${lineItemId} to Detrack:`, error)
-				
-				// Update order status to error
-				try {
-					const baseOrderId = lineItemId.split('-').slice(0, -1).join('-')
-					await db.updateOrder(baseOrderId, {
-						status: 'Error',
-						updated_at: new Date().toISOString()
-					})
-				} catch (updateError) {
-					console.error(`Failed to update order status for ${lineItemId}:`, updateError)
-				}
-				
-				results.push({ orderId: lineItemId, success: false, error: error.message })
+				console.error(`Error preparing order ${lineItemId} for Detrack:`, error)
+				exportResults.push({ orderId: lineItemId, success: false, error: error.message })
 				errorCount++
 			}
 		}
-		
+
+		if (jobs.length === 0) {
+			return new Response(JSON.stringify({ error: 'No valid jobs to export' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+
+		// Send all jobs in a single bulk request
+		console.log(`Sending ${jobs.length} jobs to Detrack bulk endpoint...`)
+		const bulkPayload = { data: jobs }
+		const detrackUrl = `${detrackConfig.baseUrl}/dn/jobs/bulk`
+		console.log(`Using Detrack URL: ${detrackUrl}`)
+		const response = await fetch(detrackUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json'
+			},
+			body: JSON.stringify(bulkPayload)
+		})
+		console.log('Detrack bulk API response status:', response.status)
+		const responseText = await response.text()
+		console.log('Detrack bulk API response:', responseText)
+		let detrackResult
+		try {
+			detrackResult = JSON.parse(responseText)
+		} catch (e) {
+			detrackResult = responseText
+		}
+
+		// Mark all jobs as exported if successful
+		if (response.ok && detrackResult && detrackResult.data && Array.isArray(detrackResult.data)) {
+			for (let i = 0; i < detrackResult.data.length; i++) {
+				const job = detrackResult.data[i]
+				const orderId = orderIds[i]
+				try {
+					const baseOrderId = orderId.split('-').slice(0, -1).join('-')
+					await db.updateOrder(baseOrderId, {
+						status: 'Exported',
+						exported_at: new Date().toISOString(),
+						updated_at: new Date().toISOString()
+					})
+					exportResults.push({ orderId, success: true, detrackResponse: job })
+					successCount++
+				} catch (e) {
+					exportResults.push({ orderId, success: false, error: 'Exported but failed to update local status' })
+					errorCount++
+				}
+			}
+		} else {
+			exportResults.push({ orderId: 'bulk', success: false, error: 'Bulk export failed', detrackResponse: detrackResult })
+			errorCount += orderIds.length
+		}
+
 		console.log(`\n=== EXPORT TO DETRACK COMPLETED ===`)
 		console.log(`Summary: Total: ${orderIds.length}, Success: ${successCount}, Errors: ${errorCount}`)
-		
+
 		return new Response(JSON.stringify({
 			success: true,
-			results,
+			exportResults,
 			summary: {
 				total: orderIds.length,
 				success: successCount,
@@ -1553,7 +1563,6 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 			status: 200,
 			headers: { 'Content-Type': 'application/json' }
 		})
-		
 	} catch (error: any) {
 		console.error('Error in handleExportToDetrack:', error)
 		return new Response(JSON.stringify({ error: 'Failed to export to Detrack', details: error.message }), {
@@ -1640,11 +1649,19 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 				"do_number": getField('deliveryOrderNo', orderName).replace('#', ''),
 				"date": getDeliveryDate(),
 				"tracking_number": getField('trackingNo', 'T0'),
-				"order_number": getField('deliveryOrderNo', orderName).replace('#', ''),
+				"order_number": getField('senderNumberOnApp', ''),
+				"invoice_number": getField('senderNameOnApp', ''),
 				"address": getField('address', ''),
-				"deliver_to_collect_from": `${getField('firstName', '')} ${getField('lastName', '')}`.trim(),
+				"deliver_to_collect_from": getField('firstName', ''),
+				"last_name": getField('lastName', ''),
 				"phone_number": cleanPhoneNumber(getField('recipientPhoneNo', '')),
 				"notify_email": getField('emailsForNotifications', ''),
+				"instructions": getField('instructions', ''),
+				"postal_code": getField('postalCode', ''),
+				"group_name": getField('group', ''),
+				"job_release_time": getField('jobReleaseTime', ''),
+				"time_window": getField('deliveryCompletionTimeWindow', ''),
+				"number_of_shipping_labels": parseInt(getField('noOfShippingLabels', '1')),
 				"items": [
 					{
 						"sku": getField('sku', ''),
@@ -1751,16 +1768,13 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 				{
 					"type": "Delivery",
 					"do_number": "TEST-CONNECTION",
-					"date": new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
-					"tracking_number": "T0",
-					"order_number": "TEST-CONNECTION",
+					"date": "18/06/2025", // Use DD/MM/YYYY format instead of YYYY-MM-DD
 					"address": "Test Address",
 					"deliver_to_collect_from": "Test Recipient",
 					"phone_number": "12345678",
-					"notify_email": "test@test.com",
+					"order_number": "TEST-CONNECTION",
 					"items": [
 						{
-							"sku": "TEST-SKU",
 							"description": "Test Item",
 							"quantity": 1
 						}
@@ -1777,17 +1791,578 @@ async function handleTestDetrackConnection(db: DatabaseService): Promise<Respons
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				'X-API-KEY': detrackConfig.apiKey
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json'
 			},
 			body: JSON.stringify(testPayload)
 		})
 		
 		console.log('Detrack API response status:', response.status)
+		console.log('Detrack API response headers:', Object.fromEntries(response.headers.entries()))
 		
 		if (!response.ok) {
 			const errorText = await response.text()
 			console.error('Detrack API error:', response.status, errorText)
-			return new Response(JSON.stringify({ error: `Detrack API error: ${response.status} - ${errorText}` }), {
+			
+			// Try to parse as JSON if possible
+			let errorDetails = errorText
+			try {
+				const errorJson = JSON.parse(errorText)
+				errorDetails = JSON.stringify(errorJson, null, 2)
+			} catch (e) {
+				// Keep as text if not JSON
+			}
+			
+			return new Response(JSON.stringify({ 
+				error: `Detrack API error: ${response.status}`,
+				details: errorDetails,
+				payload: testPayload
+			}), {
+				status: response.status,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		return new Response(JSON.stringify({ success: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+		
+	} catch (error: any) {
+		console.error('Error testing Detrack connection:', error)
+		return new Response(JSON.stringify({ error: error.message || 'Failed to test Detrack connection' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleTestDetrackSimple(db: DatabaseService): Promise<Response> {
+	try {
+		console.log('Testing Detrack connection with simple payload...')
+		
+		// Get Detrack configuration
+		const detrackConfig = await getDetrackConfig(db)
+		console.log('Detrack config:', {
+			hasConfig: !!detrackConfig,
+			isEnabled: detrackConfig?.isEnabled,
+			hasApiKey: !!detrackConfig?.apiKey,
+			baseUrl: detrackConfig?.baseUrl
+		})
+		
+		if (!detrackConfig) {
+			return new Response(JSON.stringify({ error: 'Detrack configuration not found' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.isEnabled) {
+			return new Response(JSON.stringify({ error: 'Detrack integration is disabled' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.apiKey) {
+			return new Response(JSON.stringify({ error: 'Detrack API key not configured' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		// Test connection using the correct Detrack API v2 payload structure
+		const testPayload = {
+			"data": [
+				{
+					"type": "Delivery",
+					"do_number": "TEST-CONNECTION",
+					"date": "18/06/2025", // Use DD/MM/YYYY format instead of YYYY-MM-DD
+					"address": "Test Address",
+					"deliver_to_collect_from": "Test Recipient",
+					"phone_number": "12345678",
+					"order_number": "TEST-CONNECTION",
+					"items": [
+						{
+							"description": "Test Item",
+							"quantity": 1
+						}
+					]
+				}
+			]
+		}
+		
+		console.log('Testing with payload:', testPayload)
+		console.log('Using API key:', detrackConfig.apiKey)
+		
+		// Use the correct Detrack API v2 endpoint
+		const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json'
+			},
+			body: JSON.stringify(testPayload)
+		})
+		
+		console.log('Detrack API response status:', response.status)
+		console.log('Detrack API response headers:', Object.fromEntries(response.headers.entries()))
+		
+		if (!response.ok) {
+			const errorText = await response.text()
+			console.error('Detrack API error:', response.status, errorText)
+			
+			// Try to parse as JSON if possible
+			let errorDetails = errorText
+			try {
+				const errorJson = JSON.parse(errorText)
+				errorDetails = JSON.stringify(errorJson, null, 2)
+			} catch (e) {
+				// Keep as text if not JSON
+			}
+			
+			return new Response(JSON.stringify({ 
+				error: `Detrack API error: ${response.status}`,
+				details: errorDetails,
+				payload: testPayload
+			}), {
+				status: response.status,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		return new Response(JSON.stringify({ success: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+		
+	} catch (error: any) {
+		console.error('Error testing Detrack connection:', error)
+		return new Response(JSON.stringify({ error: error.message || 'Failed to test Detrack connection' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleTestDetrackDate(db: DatabaseService): Promise<Response> {
+	try {
+		console.log('Testing Detrack connection with date payload...')
+		
+		// Get Detrack configuration
+		const detrackConfig = await getDetrackConfig(db)
+		console.log('Detrack config:', {
+			hasConfig: !!detrackConfig,
+			isEnabled: detrackConfig?.isEnabled,
+			hasApiKey: !!detrackConfig?.apiKey,
+			baseUrl: detrackConfig?.baseUrl
+		})
+		
+		if (!detrackConfig) {
+			return new Response(JSON.stringify({ error: 'Detrack configuration not found' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.isEnabled) {
+			return new Response(JSON.stringify({ error: 'Detrack integration is disabled' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.apiKey) {
+			return new Response(JSON.stringify({ error: 'Detrack API key not configured' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		// Test connection using the correct Detrack API v2 payload structure
+		const testPayload = {
+			"data": [
+				{
+					"type": "Delivery",
+					"do_number": "TEST-CONNECTION",
+					"date": "18/06/2025", // Use DD/MM/YYYY format instead of YYYY-MM-DD
+					"address": "Test Address",
+					"deliver_to_collect_from": "Test Recipient",
+					"phone_number": "12345678",
+					"order_number": "TEST-CONNECTION",
+					"items": [
+						{
+							"description": "Test Item",
+							"quantity": 1
+						}
+					]
+				}
+			]
+		}
+		
+		console.log('Testing with payload:', testPayload)
+		console.log('Using API key:', detrackConfig.apiKey)
+		
+		// Use the correct Detrack API v2 endpoint
+		const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json'
+			},
+			body: JSON.stringify(testPayload)
+		})
+		
+		console.log('Detrack API response status:', response.status)
+		console.log('Detrack API response headers:', Object.fromEntries(response.headers.entries()))
+		
+		if (!response.ok) {
+			const errorText = await response.text()
+			console.error('Detrack API error:', response.status, errorText)
+			
+			// Try to parse as JSON if possible
+			let errorDetails = errorText
+			try {
+				const errorJson = JSON.parse(errorText)
+				errorDetails = JSON.stringify(errorJson, null, 2)
+			} catch (e) {
+				// Keep as text if not JSON
+			}
+			
+			return new Response(JSON.stringify({ 
+				error: `Detrack API error: ${response.status}`,
+				details: errorDetails,
+				payload: testPayload
+			}), {
+				status: response.status,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		return new Response(JSON.stringify({ success: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+		
+	} catch (error: any) {
+		console.error('Error testing Detrack connection:', error)
+		return new Response(JSON.stringify({ error: error.message || 'Failed to test Detrack connection' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleTestDetrackV1(db: DatabaseService): Promise<Response> {
+	try {
+		console.log('Testing Detrack connection with v1 payload...')
+		
+		// Get Detrack configuration
+		const detrackConfig = await getDetrackConfig(db)
+		console.log('Detrack config:', {
+			hasConfig: !!detrackConfig,
+			isEnabled: detrackConfig?.isEnabled,
+			hasApiKey: !!detrackConfig?.apiKey,
+			baseUrl: detrackConfig?.baseUrl
+		})
+		
+		if (!detrackConfig) {
+			return new Response(JSON.stringify({ error: 'Detrack configuration not found' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.isEnabled) {
+			return new Response(JSON.stringify({ error: 'Detrack integration is disabled' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.apiKey) {
+			return new Response(JSON.stringify({ error: 'Detrack API key not configured' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		// Test connection using the correct Detrack API v2 payload structure
+		const testPayload = {
+			"data": [
+				{
+					"type": "Delivery",
+					"do_number": "TEST-CONNECTION",
+					"date": "18/06/2025", // Use DD/MM/YYYY format instead of YYYY-MM-DD
+					"address": "Test Address",
+					"deliver_to_collect_from": "Test Recipient",
+					"phone_number": "12345678",
+					"order_number": "TEST-CONNECTION",
+					"items": [
+						{
+							"description": "Test Item",
+							"quantity": 1
+						}
+					]
+				}
+			]
+		}
+		
+		console.log('Testing with payload:', testPayload)
+		console.log('Using API key:', detrackConfig.apiKey)
+		
+		// Use the correct Detrack API v2 endpoint
+		const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json'
+			},
+			body: JSON.stringify(testPayload)
+		})
+		
+		console.log('Detrack API response status:', response.status)
+		console.log('Detrack API response headers:', Object.fromEntries(response.headers.entries()))
+		
+		if (!response.ok) {
+			const errorText = await response.text()
+			console.error('Detrack API error:', response.status, errorText)
+			
+			// Try to parse as JSON if possible
+			let errorDetails = errorText
+			try {
+				const errorJson = JSON.parse(errorText)
+				errorDetails = JSON.stringify(errorJson, null, 2)
+			} catch (e) {
+				// Keep as text if not JSON
+			}
+			
+			return new Response(JSON.stringify({ 
+				error: `Detrack API error: ${response.status}`,
+				details: errorDetails,
+				payload: testPayload
+			}), {
+				status: response.status,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		return new Response(JSON.stringify({ success: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+		
+	} catch (error: any) {
+		console.error('Error testing Detrack connection:', error)
+		return new Response(JSON.stringify({ error: error.message || 'Failed to test Detrack connection' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleTestDetrackV2Alt(db: DatabaseService): Promise<Response> {
+	try {
+		console.log('Testing Detrack connection with v2 alt payload...')
+		
+		// Get Detrack configuration
+		const detrackConfig = await getDetrackConfig(db)
+		console.log('Detrack config:', {
+			hasConfig: !!detrackConfig,
+			isEnabled: detrackConfig?.isEnabled,
+			hasApiKey: !!detrackConfig?.apiKey,
+			baseUrl: detrackConfig?.baseUrl
+		})
+		
+		if (!detrackConfig) {
+			return new Response(JSON.stringify({ error: 'Detrack configuration not found' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.isEnabled) {
+			return new Response(JSON.stringify({ error: 'Detrack integration is disabled' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.apiKey) {
+			return new Response(JSON.stringify({ error: 'Detrack API key not configured' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		// Test connection using the correct Detrack API v2 payload structure
+		const testPayload = {
+			"data": [
+				{
+					"type": "Delivery",
+					"do_number": "TEST-CONNECTION",
+					"date": "18/06/2025", // Use DD/MM/YYYY format instead of YYYY-MM-DD
+					"address": "Test Address",
+					"deliver_to_collect_from": "Test Recipient",
+					"phone_number": "12345678",
+					"order_number": "TEST-CONNECTION",
+					"items": [
+						{
+							"description": "Test Item",
+							"quantity": 1
+						}
+					]
+				}
+			]
+		}
+		
+		console.log('Testing with payload:', testPayload)
+		console.log('Using API key:', detrackConfig.apiKey)
+		
+		// Use the correct Detrack API v2 endpoint
+		const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json'
+			},
+			body: JSON.stringify(testPayload)
+		})
+		
+		console.log('Detrack API response status:', response.status)
+		console.log('Detrack API response headers:', Object.fromEntries(response.headers.entries()))
+		
+		if (!response.ok) {
+			const errorText = await response.text()
+			console.error('Detrack API error:', response.status, errorText)
+			
+			// Try to parse as JSON if possible
+			let errorDetails = errorText
+			try {
+				const errorJson = JSON.parse(errorText)
+				errorDetails = JSON.stringify(errorJson, null, 2)
+			} catch (e) {
+				// Keep as text if not JSON
+			}
+			
+			return new Response(JSON.stringify({ 
+				error: `Detrack API error: ${response.status}`,
+				details: errorDetails,
+				payload: testPayload
+			}), {
+				status: response.status,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		return new Response(JSON.stringify({ success: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+		
+	} catch (error: any) {
+		console.error('Error testing Detrack connection:', error)
+		return new Response(JSON.stringify({ error: error.message || 'Failed to test Detrack connection' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+async function handleTestDetrackAuth(db: DatabaseService): Promise<Response> {
+	try {
+		console.log('Testing Detrack connection with auth payload...')
+		
+		// Get Detrack configuration
+		const detrackConfig = await getDetrackConfig(db)
+		console.log('Detrack config:', {
+			hasConfig: !!detrackConfig,
+			isEnabled: detrackConfig?.isEnabled,
+			hasApiKey: !!detrackConfig?.apiKey,
+			baseUrl: detrackConfig?.baseUrl
+		})
+		
+		if (!detrackConfig) {
+			return new Response(JSON.stringify({ error: 'Detrack configuration not found' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.isEnabled) {
+			return new Response(JSON.stringify({ error: 'Detrack integration is disabled' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		if (!detrackConfig.apiKey) {
+			return new Response(JSON.stringify({ error: 'Detrack API key not configured' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		// Test connection using the correct Detrack API v2 payload structure
+		const testPayload = {
+			"data": [
+				{
+					"type": "Delivery",
+					"do_number": "TEST-CONNECTION",
+					"date": "18/06/2025", // Use DD/MM/YYYY format instead of YYYY-MM-DD
+					"address": "Test Address",
+					"deliver_to_collect_from": "Test Recipient",
+					"phone_number": "12345678",
+					"order_number": "TEST-CONNECTION",
+					"items": [
+						{
+							"description": "Test Item",
+							"quantity": 1
+						}
+					]
+				}
+			]
+		}
+		
+		console.log('Testing with payload:', testPayload)
+		console.log('Using API key:', detrackConfig.apiKey)
+		
+		// Use the correct Detrack API v2 endpoint
+		const response = await fetch(`https://app.detrack.com/api/v2/dn/jobs`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-KEY': detrackConfig.apiKey,
+				'Accept': 'application/json'
+			},
+			body: JSON.stringify(testPayload)
+		})
+		
+		console.log('Detrack API response status:', response.status)
+		console.log('Detrack API response headers:', Object.fromEntries(response.headers.entries()))
+		
+		if (!response.ok) {
+			const errorText = await response.text()
+			console.error('Detrack API error:', response.status, errorText)
+			
+			// Try to parse as JSON if possible
+			let errorDetails = errorText
+			try {
+				const errorJson = JSON.parse(errorText)
+				errorDetails = JSON.stringify(errorJson, null, 2)
+			} catch (e) {
+				// Keep as text if not JSON
+			}
+			
+			return new Response(JSON.stringify({ 
+				error: `Detrack API error: ${response.status}`,
+				details: errorDetails,
+				payload: testPayload
+			}), {
 				status: response.status,
 				headers: { 'Content-Type': 'application/json' }
 			})
@@ -1823,10 +2398,10 @@ async function handleUpdateDetrackApiKey(db: DatabaseService): Promise<Response>
 			baseUrl: detrackConfig?.baseUrl
 		})
 		
-		// Update API key to the correct one
+		// Update API key to the correct one and ensure we use the v2 endpoint
 		await db.saveDetrackConfig({
 			apiKey: correctApiKey,
-			baseUrl: detrackConfig?.baseUrl || 'https://connect.detrack.com/api/v1',
+			baseUrl: 'https://app.detrack.com/api/v2', // Always use the correct v2 endpoint
 			isEnabled: detrackConfig?.isEnabled || true
 		})
 		

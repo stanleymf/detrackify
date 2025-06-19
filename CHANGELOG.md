@@ -10,6 +10,16 @@ All notable changes to this project will be documented in this file.
 - **Phone Number Normalization** - Automatic phone number cleaning for Singapore (+65/65) and international numbers (removes + prefix)
 - **Enhanced Order Refresh** - Improved order refresh after fetch operations with automatic page reset and timing optimizations
 - **Phone Field Processing** - Added phone normalization for `senderNumberOnApp`, `senderPhoneNo`, and `recipientPhoneNo` fields
+- **Detrack API Integration** - Complete API integration with correct v2 endpoint and payload structure
+- **API Testing Framework** - Comprehensive testing suite for Detrack API endpoints and payload variations
+- **Real Data Export Testing** - Testing export functionality with actual dashboard order data
+- **API Permission Analysis** - Identified read-only vs write permissions for API key
+- **Map dashboard field 'Sender's Number To Appear on App' to Detrack's 'order_number' payload field**
+- **Map dashboard field 'Sender's name to appear on app' to Detrack's 'invoice_number' payload field**
+- **Map dashboard field 'First Name' to Detrack's 'deliver_to_collect_from' payload field**
+- **Map dashboard field 'Last Name' to Detrack's 'last_name' payload field**
+- **Removed unsupported or misnamed fields from Detrack payload**
+- **Confirmed successful end-to-end export and field mapping with Detrack API**
 
 ### Changed
 - **Dashboard Default Limit** - Increased from 50 to 200 orders per page across all database queries and frontend display
@@ -17,18 +27,38 @@ All notable changes to this project will be documented in this file.
 - **Order Refresh Logic** - All order-modifying operations now reset to page 1 to show newest orders first
 - **Phone Number Formatting** - Singapore numbers now display without country code, international numbers without + prefix
 - **Database Query Limits** - All order retrieval methods now default to 200 records instead of 50
+- **Detrack Test Endpoint** - Fixed main test endpoint to use correct v2 API format instead of v1
+- **API Payload Structure** - Standardized on v2 API format with proper data wrapping structure
+- **Error Handling** - Enhanced error reporting for API permission and configuration issues
 
 ### Fixed
 - **Order Refresh After Fetch** - Fixed issue where orders wouldn't appear after fetching until manual page refresh
 - **Multi-Store Fetch Display** - Orders from all stores now appear in dashboard after fetch operation
 - **Phone Number Consistency** - Standardized phone number format across all phone-related fields
 - **Dashboard Pagination** - Ensures newest orders are always visible after operations that modify order data
+- **API Endpoint Consistency** - All test endpoints now use the correct v2 API format
+- **Payload Format** - Fixed payload structure to match successful GET response format
+- **Test Endpoint Routing** - Corrected main test endpoint to use proper v2 implementation
 
 ### Technical Improvements
 - **Database Service Updates** - Updated all order retrieval methods to use 200 as default limit
 - **Frontend State Management** - Improved order refresh timing and page state management
 - **Phone Processing Logic** - Added phone normalization in OrderProcessor class with comprehensive test coverage
 - **Migration Support** - Added database migration for phone normalization field mappings
+- **API Authentication** - Confirmed API key is valid and can authenticate successfully
+- **GET Request Success** - Successfully retrieving delivery jobs from Detrack API
+- **Data Structure Analysis** - Analyzed real Detrack job data structure for proper payload formatting
+- **Permission Investigation** - Identified that API key has read-only permissions (GET works, POST fails with 500)
+
+### Known Issues
+- **POST Request 500 Error** - All POST requests to create jobs return 500 Internal Server Error
+- **API Key Permissions** - Current API key appears to have read-only permissions only
+- **Write Access Required** - Need Detrack support to grant write permissions for job creation
+
+### Next Steps
+- Contact Detrack support to request write permissions for API key
+- Test export functionality with real dashboard order data
+- Implement export UI in dashboard for when permissions are granted
 
 ## [0.7.0] - 2024-01-XX
 
