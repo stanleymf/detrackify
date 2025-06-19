@@ -6,17 +6,58 @@ import { Login } from "@/components/Login"
 import { initializeMockData } from "@/lib/mockData"
 import Analytics from "@/components/Analytics"
 import Info from "@/components/Info"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { BrowserRouter, Routes, Route, Navigate, useLocation, NavLink } from "react-router-dom"
+
+function NavigationTabs() {
+  // const location = useLocation()
+  // Map path to tab value (not needed for rendering)
+  // const pathToTab = {
+  //   "/dashboard": "dashboard",
+  //   "/analytics": "analytics",
+  //   "/info": "info",
+  //   "/settings": "settings"
+  // }
+  // const tab = pathToTab[location.pathname] || "dashboard"
+  return (
+    <div className="mb-6 flex justify-end md:justify-center">
+      <TabsList className="bg-dust-200 gap-x-2 md:gap-x-8">
+        <NavLink to="/dashboard" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+          Dashboard
+        </NavLink>
+        <NavLink to="/analytics" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+          Analytics
+        </NavLink>
+        <NavLink to="/info" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+          Info
+        </NavLink>
+        <NavLink to="/settings" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+          Settings
+        </NavLink>
+      </TabsList>
+    </div>
+  )
+}
+
+function AppRoutes({ viewMode, setViewMode }: { viewMode: any, setViewMode: any }) {
+  return (
+    <Routes>
+      <Route path="/dashboard" element={<Dashboard viewMode={viewMode} onViewModeChange={setViewMode} />} />
+      <Route path="/settings" element={<Settings viewMode={viewMode} onViewModeChange={setViewMode} />} />
+      <Route path="/analytics" element={<Analytics viewMode={viewMode} onViewModeChange={setViewMode} />} />
+      <Route path="/info" element={<Info viewMode={viewMode} onViewModeChange={setViewMode} />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  )
+}
 
 function App() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "settings" | "analytics" | "info">("dashboard")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'auto' | 'mobile' | 'desktop'>('auto')
 
   useEffect(() => {
     // Check authentication status on app load
-    console.log('App useEffect: checking auth status')
     checkAuthStatus()
     // Initialize mock data on first load
     initializeMockData()
@@ -27,18 +68,15 @@ function App() {
       const response = await fetch('/api/auth/check', {
         credentials: 'include'
       })
-      console.log('Auth check response:', response.status)
       if (response.ok) {
         setIsAuthenticated(true)
       } else {
         setIsAuthenticated(false)
       }
     } catch (error) {
-      console.error('Auth check failed:', error)
       setIsAuthenticated(false)
     } finally {
       setIsLoading(false)
-      console.log('Auth check complete, isLoading set to false')
     }
   }
 
@@ -53,14 +91,12 @@ function App() {
         credentials: 'include'
       })
     } catch (error) {
-      console.error('Logout failed:', error)
     } finally {
       setIsAuthenticated(false)
     }
   }
 
   if (isLoading) {
-    console.log('App is loading...')
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-lg">Loading...</div>
@@ -69,44 +105,22 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    console.log('User not authenticated, showing Login form')
     return <Login onLogin={handleLogin} />
   }
 
-  console.log('User authenticated, showing app')
-
   return (
-    <Layout 
-      activeTab={activeTab} 
-      onTabChange={setActiveTab} 
-      onLogout={handleLogout}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
-    >
-      {/* Navigation Tabs - centered on desktop, right-aligned on mobile */}
-      <div className="mb-6 flex justify-end md:justify-center">
-        <Tabs value={activeTab} onValueChange={setActiveTab as (value: string) => void}>
-          <TabsList className="bg-dust-200 gap-x-2 md:gap-x-8">
-            <TabsTrigger value="dashboard" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
-              Dashboard
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger value="info" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
-              Info
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
-              Settings
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-      {activeTab === "dashboard" && <Dashboard viewMode={viewMode} onViewModeChange={setViewMode} />}
-      {activeTab === "settings" && <Settings viewMode={viewMode} onViewModeChange={setViewMode} />}
-      {activeTab === "analytics" && <Analytics viewMode={viewMode} onViewModeChange={setViewMode} />}
-      {activeTab === "info" && <Info viewMode={viewMode} onViewModeChange={setViewMode} />}
-    </Layout>
+    <BrowserRouter>
+      <Layout 
+        activeTab="dashboard" // Not used anymore
+        onTabChange={() => {}} // Not used anymore
+        onLogout={handleLogout}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      >
+        <NavigationTabs />
+        <AppRoutes viewMode={viewMode} setViewMode={setViewMode} />
+      </Layout>
+    </BrowserRouter>
   )
 }
 
