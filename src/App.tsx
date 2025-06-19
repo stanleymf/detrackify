@@ -6,35 +6,37 @@ import { Login } from "@/components/Login"
 import { initializeMockData } from "@/lib/mockData"
 import Analytics from "@/components/Analytics"
 import Info from "@/components/Info"
-import { TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList } from "@/components/ui/tabs"
 import { BrowserRouter, Routes, Route, Navigate, useLocation, NavLink } from "react-router-dom"
 
 function NavigationTabs() {
-  // const location = useLocation()
-  // Map path to tab value (not needed for rendering)
-  // const pathToTab = {
-  //   "/dashboard": "dashboard",
-  //   "/analytics": "analytics",
-  //   "/info": "info",
-  //   "/settings": "settings"
-  // }
-  // const tab = pathToTab[location.pathname] || "dashboard"
+  const location = useLocation()
+  // Map path to tab value
+  const pathToTab: Record<string, string> = {
+    "/dashboard": "dashboard",
+    "/analytics": "analytics",
+    "/info": "info",
+    "/settings": "settings"
+  }
+  const tab = pathToTab[location.pathname] || "dashboard"
   return (
     <div className="mb-6 flex justify-end md:justify-center">
-      <TabsList className="bg-dust-200 gap-x-2 md:gap-x-8">
-        <NavLink to="/dashboard" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
-          Dashboard
-        </NavLink>
-        <NavLink to="/analytics" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
-          Analytics
-        </NavLink>
-        <NavLink to="/info" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
-          Info
-        </NavLink>
-        <NavLink to="/settings" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
-          Settings
-        </NavLink>
-      </TabsList>
+      <Tabs value={tab}>
+        <TabsList className="bg-dust-200 gap-x-2 md:gap-x-8">
+          <NavLink to="/dashboard" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+            Dashboard
+          </NavLink>
+          <NavLink to="/analytics" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+            Analytics
+          </NavLink>
+          <NavLink to="/info" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+            Info
+          </NavLink>
+          <NavLink to="/settings" className={({ isActive }) => isActive ? "data-[state=active]:bg-olive-600 data-[state=active]:text-white px-4 py-2 rounded" : "px-4 py-2 rounded"}>
+            Settings
+          </NavLink>
+        </TabsList>
+      </Tabs>
     </div>
   )
 }
