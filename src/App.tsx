@@ -83,10 +83,10 @@ function App() {
       viewMode={viewMode}
       onViewModeChange={setViewMode}
     >
-      {/* Navigation Tabs - right-aligned, above dashboard content */}
-      <div className="flex justify-end mb-6">
+      {/* Navigation Tabs - centered on desktop, right-aligned on mobile */}
+      <div className="mb-6 flex justify-end md:justify-center">
         <Tabs value={activeTab} onValueChange={setActiveTab as (value: string) => void}>
-          <TabsList className="bg-dust-200">
+          <TabsList className="bg-dust-200 gap-x-2 md:gap-x-8">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-olive-600 data-[state=active]:text-white">
               Dashboard
             </TabsTrigger>
