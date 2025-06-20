@@ -4,8 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Eye, Calendar, Clock, RefreshCw, Menu, X, Smartphone, Monitor } from "lucide-react"
+import { Eye, Calendar, Clock, RefreshCw, Menu, X } from "lucide-react"
 import { type Order, DASHBOARD_FIELD_LABELS, type DashboardColumnConfig } from "@/types"
 import { storage } from "@/lib/storage"
 import { useIsMobile } from "@/components/hooks/use-mobile"

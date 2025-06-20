@@ -9,7 +9,9 @@ import { Calendar, Download, BarChart3, Users, Clock, CheckCircle, XCircle, Tren
 
 // Fetch available job types from backend
 async function fetchJobTypes() {
-  const res = await fetch('/api/detrack/job-types');
+  const res = await fetch('/api/detrack/job-types', {
+    credentials: 'include'
+  });
   if (!res.ok) throw new Error('Failed to fetch job types');
   const data = await res.json();
   return data.jobTypes || [];
@@ -18,7 +20,9 @@ async function fetchJobTypes() {
 // Fetch jobs from backend API, which proxies to Detrack
 async function fetchDetrackJobs(type: string, date: string) {
   const params = new URLSearchParams({ type, date });
-  const res = await fetch(`/api/detrack/jobs?${params.toString()}`);
+  const res = await fetch(`/api/detrack/jobs?${params.toString()}`, {
+    credentials: 'include'
+  });
   if (!res.ok) throw new Error('Failed to fetch jobs');
   const data = await res.json();
   // Map/normalize the response to the table fields
@@ -37,6 +41,7 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
   // Read driver info from server API
   const [driverInfos, setDriverInfos] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [selectedTimeWindow, setSelectedTimeWindow] = React.useState<'Morning' | 'Afternoon' | 'Night' | 'Total'>('Total');
 
   React.useEffect(() => {
     const loadDriverInfo = async () => {
@@ -63,12 +68,20 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
     loadDriverInfo();
   }, []);
 
+  // Filter jobs by selected time window
+  const filteredJobs = React.useMemo(() => {
+    if (selectedTimeWindow === 'Total') {
+      return jobs;
+    }
+    return jobs.filter(job => job.time_window === selectedTimeWindow);
+  }, [jobs, selectedTimeWindow]);
+
   // Map driver name to jobs and calculate totals
   const driverPayData = React.useMemo(() => {
     if (!driverInfos.length) return [];
     return driverInfos.map(driver => {
       // Match jobs where assigned_to matches driverName (case-insensitive)
-      const matchedJobs = jobs.filter(job => 
+      const matchedJobs = filteredJobs.filter(job => 
         job.assign_to && 
         job.assign_to.trim().toLowerCase() === driver.driverName.trim().toLowerCase()
       );
@@ -85,7 +98,7 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
         pricePerDrop,
       };
     }).filter(d => d.totalCount > 0);
-  }, [jobs, driverInfos]);
+  }, [filteredJobs, driverInfos]);
 
   if (loading) {
     return (
@@ -100,7 +113,7 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <Users className="mx-auto h-12 w-12 mb-4 opacity-50" />
-        <p className="text-sm">No part-time pay data for this day.</p>
+        <p className="text-sm">No part-time pay data for {selectedTimeWindow === 'Total' ? 'this day' : selectedTimeWindow.toLowerCase()}.</p>
         <p className="text-xs mt-1">Add driver information in the Info tab to see pay calculations.</p>
       </div>
     );
@@ -111,13 +124,34 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
 
   return (
     <div className="space-y-4">
+      {/* Time Window Toggle */}
+      <div className="flex flex-wrap gap-2">
+        {(['Morning', 'Afternoon', 'Night', 'Total'] as const).map((timeWindow) => (
+          <Button
+            key={timeWindow}
+            variant={selectedTimeWindow === timeWindow ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedTimeWindow(timeWindow)}
+            className="flex items-center gap-2"
+          >
+            {timeWindow === 'Morning' && <Clock className="w-4 h-4 text-orange-500" />}
+            {timeWindow === 'Afternoon' && <Clock className="w-4 h-4 text-blue-500" />}
+            {timeWindow === 'Night' && <Clock className="w-4 h-4 text-purple-500" />}
+            {timeWindow === 'Total' && <BarChart3 className="w-4 h-4 text-green-500" />}
+            {timeWindow}
+          </Button>
+        ))}
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-700">Total Orders</p>
+                <p className="text-sm font-medium text-blue-700">
+                  {selectedTimeWindow === 'Total' ? 'Total Orders' : `${selectedTimeWindow} Orders`}
+                </p>
                 <p className="text-2xl font-bold text-blue-900">{totalOrders}</p>
               </div>
               <BarChart3 className="h-8 w-8 text-blue-600" />
@@ -129,7 +163,9 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-700">Total Amount</p>
+                <p className="text-sm font-medium text-green-700">
+                  {selectedTimeWindow === 'Total' ? 'Total Amount' : `${selectedTimeWindow} Amount`}
+                </p>
                 <p className="text-2xl font-bold text-green-900">${totalAmount.toFixed(2)}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-green-600" />
@@ -141,7 +177,9 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-700">Active Drivers</p>
+                <p className="text-sm font-medium text-purple-700">
+                  {selectedTimeWindow === 'Total' ? 'Active Drivers' : `${selectedTimeWindow} Drivers`}
+                </p>
                 <p className="text-2xl font-bold text-purple-900">{driverPayData.length}</p>
               </div>
               <Users className="h-8 w-8 text-purple-600" />
@@ -157,9 +195,13 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
             <tr className="bg-gray-50 border-b">
               <th className="px-4 py-3 text-left font-medium text-gray-700">Driver Name</th>
               <th className="px-4 py-3 text-left font-medium text-gray-700">Paynow Number</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-700">Orders</th>
+              <th className="px-4 py-3 text-center font-medium text-gray-700">
+                {selectedTimeWindow === 'Total' ? 'Orders' : `${selectedTimeWindow} Orders`}
+              </th>
               <th className="px-4 py-3 text-right font-medium text-gray-700">Price Per Drop</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-700">Total Amount</th>
+              <th className="px-4 py-3 text-right font-medium text-gray-700">
+                {selectedTimeWindow === 'Total' ? 'Total Amount' : `${selectedTimeWindow} Amount`}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -181,13 +223,7 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
   );
 }
 
-export default function Analytics({ 
-  viewMode = 'auto', 
-  onViewModeChange 
-}: { 
-  viewMode?: 'auto' | 'mobile' | 'desktop'
-  onViewModeChange?: (mode: 'auto' | 'mobile' | 'desktop') => void 
-}) {
+export default function Analytics() {
   const [jobTypes, setJobTypes] = useState<string[]>([]);
   const [type, setType] = useState('Delivery');
   const [date, setDate] = useState('');

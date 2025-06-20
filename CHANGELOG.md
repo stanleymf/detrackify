@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.5] - 2025-06-20
+
+### Fixed
+- **Analytics Authentication** - Fixed 404 error when fetching Detrack job types due to missing authentication credentials
+- **API Endpoint Access** - Added `credentials: 'include'` to fetchJobTypes and fetchDetrackJobs functions
+- **Protected Routes** - Ensured all Detrack API endpoints properly send authentication cookies
+
+### Technical Improvements
+- **Authentication Consistency** - All API calls now consistently include authentication credentials
+- **Error Handling** - Better error handling for authenticated API endpoints
+
+## [0.13.4] - 2025-06-20
+
+### Added
+- **Time Window Toggle** - Added toggle functionality to Part-Time Pay section for filtering by time windows
+- **Enhanced Analytics** - Users can now switch between Morning, Afternoon, Night, and Total views in Part-Time Pay
+- **Dynamic Labels** - Summary cards and table headers now update based on selected time window
+- **Visual Indicators** - Added colored clock icons for each time window button for better UX
+
+### Changed
+- **Part-Time Pay UI** - Enhanced interface with time window filter buttons above summary cards
+- **Pay Calculation** - Pay calculations now respect selected time window filter
+- **Summary Statistics** - Summary cards show time-specific data when a time window is selected
+
+### Technical Improvements
+- **Component State Management** - Added state management for time window selection in PartTimePay component
+- **Job Filtering** - Implemented job filtering logic based on time_window field
+- **Responsive Design** - Time window toggle buttons are responsive and work on mobile devices
+
 ## [0.13.3] - 2025-06-20
 
 ### Changed
