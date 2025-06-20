@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.3] - 2025-06-20
+
+### Changed
+- **Project Structure** - Comprehensive reorganization of codebase for better maintainability
+- **File Organization** - Moved files to dedicated directories:
+  - `scripts/` - Utility scripts, database files, and configuration scripts
+  - `tests/` - Test files and debugging utilities
+  - `docs/` - Documentation and development notes
+- **Code Cleanup** - Removed debug console.log statements from production code
+- **Documentation** - Added comprehensive README.md with project overview and setup instructions
+
+### Added
+- **Development Setup** - Added `scripts/dev-setup.sh` for automated development environment setup
+- **Enhanced .gitignore** - Added exclusions for database files, temporary files, and build artifacts
+- **Project Documentation** - Complete project structure documentation and setup guide
+
+### Removed
+- **Temporary Files** - Removed `cookies.txt` and `detrackify.db` from repository
+- **Debug Logging** - Cleaned up excessive console.log statements from frontend components
+- **Unused Files** - Organized and moved scattered files to appropriate directories
+
+### Technical Improvements
+- **Code Organization** - Better separation of concerns with dedicated directories
+- **Maintainability** - Improved project structure for easier development and maintenance
+- **Documentation** - Enhanced documentation for new developers and project overview
+
 ## [0.13.2] - 2025-06-20
 
 ### Fixed
