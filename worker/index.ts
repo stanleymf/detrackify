@@ -191,6 +191,22 @@ async function handleApiRoutes(
 		})
 	}
 
+	if (path === '/api/orders' && request.method === 'GET') {
+		return handleGetOrders(request, db)
+	}
+
+	if (path === '/api/orders/clear-all' && request.method === 'DELETE') {
+		console.log('=== CLEAR ALL ORDERS ENDPOINT CALLED ===')
+		console.log('Request headers:', Object.fromEntries(request.headers.entries()))
+		console.log('Request URL:', request.url)
+		return handleClearAllOrders(db)
+	}
+
+	if (path.startsWith('/api/orders/') && request.method === 'DELETE') {
+		const orderId = path.split('/')[3]
+		return handleDeleteOrder(orderId, db)
+	}
+
 	if (path === '/api/detrack/job-types' && request.method === 'GET') {
 		return await handleGetDetrackJobTypes(db)
 	}
@@ -221,21 +237,8 @@ async function handleApiRoutes(
 		return handleDeleteStore(storeId, db)
 	}
 
-	if (path === '/api/orders' && request.method === 'GET') {
-		return handleGetOrders(request, db)
-	}
-
-	if (path === '/api/orders/clear-all' && request.method === 'DELETE') {
-		return handleClearAllOrders(db)
-	}
-
 	if (path === '/api/export/detrack' && request.method === 'POST') {
 		return handleExportToDetrack(request, db)
-	}
-
-	if (path.startsWith('/api/orders/') && request.method === 'DELETE') {
-		const orderId = path.split('/')[3]
-		return handleDeleteOrder(orderId, db)
 	}
 
 	if (path.startsWith('/api/stores/') && path.includes('/mappings') && request.method === 'GET') {
@@ -1228,14 +1231,30 @@ async function handleFetchOrders(request: Request, db: DatabaseService): Promise
 
 async function handleDeleteOrder(orderId: string, db: DatabaseService): Promise<Response> {
 	try {
-		await db.deleteOrder(orderId)
+		console.log(`[handleDeleteOrder] Attempting to delete order: ${orderId}`)
 		
-		return new Response(JSON.stringify({ success: true }), {
+		// First check if the order exists
+		const existingOrder = await db.getOrderById(orderId)
+		if (!existingOrder) {
+			console.log(`[handleDeleteOrder] Order not found: ${orderId}`)
+			return new Response(JSON.stringify({ error: 'Order not found' }), {
+				status: 404,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+		
+		console.log(`[handleDeleteOrder] Found order to delete: ${orderId} (${existingOrder.shopify_order_name})`)
+		
+		await db.deleteOrder(orderId)
+		console.log(`[handleDeleteOrder] Successfully deleted order: ${orderId}`)
+		
+		return new Response(JSON.stringify({ success: true, deletedOrderId: orderId }), {
 			status: 200,
 			headers: { 'Content-Type': 'application/json' }
 		})
 	} catch (error) {
-		return new Response(JSON.stringify({ error: 'Failed to delete order' }), {
+		console.error(`[handleDeleteOrder] Error deleting order ${orderId}:`, error)
+		return new Response(JSON.stringify({ error: 'Failed to delete order', details: error instanceof Error ? error.message : String(error) }), {
 			status: 500,
 			headers: { 'Content-Type': 'application/json' }
 		})
@@ -1320,26 +1339,47 @@ async function handleReprocessOrders(request: Request, db: DatabaseService): Pro
 
 async function handleClearAllOrders(db: DatabaseService): Promise<Response> {
 	try {
-		console.log('handleClearAllOrders: Starting bulk delete operation...')
+		console.log('=== handleClearAllOrders: Starting bulk delete operation ===')
+		console.log('Database service instance:', !!db)
 		
 		// First, let's check how many orders exist before deletion
 		const ordersBefore = await db.getAllOrders(1000, 0)
 		console.log(`handleClearAllOrders: Found ${ordersBefore.length} orders before deletion`)
 		
+		// Log a sample order to verify we're getting data
+		if (ordersBefore.length > 0) {
+			console.log('Sample order before deletion:', {
+				id: ordersBefore[0].id,
+				name: ordersBefore[0].shopify_order_name,
+				status: ordersBefore[0].status
+			})
+		}
+		
+		console.log('handleClearAllOrders: Calling db.deleteAllOrders()...')
 		await db.deleteAllOrders()
-		console.log('handleClearAllOrders: deleteAllOrders() completed')
+		console.log('handleClearAllOrders: deleteAllOrders() completed successfully')
 		
 		// Let's verify the deletion worked
 		const ordersAfter = await db.getAllOrders(1000, 0)
 		console.log(`handleClearAllOrders: Found ${ordersAfter.length} orders after deletion`)
 		
-		return new Response(JSON.stringify({ success: true, deletedCount: ordersBefore.length }), {
+		const response = { success: true, deletedCount: ordersBefore.length }
+		console.log('handleClearAllOrders: Returning success response:', response)
+		
+		return new Response(JSON.stringify(response), {
 			status: 200,
 			headers: { 'Content-Type': 'application/json' }
 		})
 	} catch (error) {
-		console.error('handleClearAllOrders: Error during bulk delete:', error)
-		return new Response(JSON.stringify({ error: 'Failed to clear all orders', details: error instanceof Error ? error.message : String(error) }), {
+		console.error('=== handleClearAllOrders: Error during bulk delete ===')
+		console.error('Error details:', error)
+		console.error('Error message:', error instanceof Error ? error.message : String(error))
+		console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+		
+		return new Response(JSON.stringify({ 
+			error: 'Failed to clear all orders', 
+			details: error instanceof Error ? error.message : String(error) 
+		}), {
 			status: 500,
 			headers: { 'Content-Type': 'application/json' }
 		})
@@ -1550,16 +1590,15 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 		const allOrders = await db.getAllOrders(1000, 0) // Get all orders
 		console.log(`Found ${allOrders.length} total orders in database`)
 
-		const jobs = []
-		const exportResults: Array<{ orderId: string, success: boolean, error?: string, detrackResponse?: any }> = []
-		let successCount = 0
-		let errorCount = 0
-
+		// Group line items by their base order ID
+		const orderGroups = new Map<string, { order: any, lineItems: any[], lineItemIds: string[] }>()
+		
 		for (const lineItemId of orderIds) {
 			try {
-				console.log(`\n--- Processing line item ${lineItemId} for Detrack export ---`)
+				console.log(`\n--- Processing line item ${lineItemId} for grouping ---`)
 				const baseOrderId = lineItemId.split('-').slice(0, -1).join('-')
 				console.log(`Looking for base order ID: ${baseOrderId}`)
+				
 				const order = allOrders.find(o => o.id === baseOrderId)
 				if (!order) {
 					console.error(`Order ${baseOrderId} not found in database`)
@@ -1567,6 +1606,7 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 					errorCount++
 					continue
 				}
+				
 				let processedData: any[]
 				try {
 					processedData = JSON.parse(order.processed_data)
@@ -1577,20 +1617,24 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 					errorCount++
 					continue
 				}
+				
 				if (!processedData || processedData.length === 0) {
 					console.error(`Order ${baseOrderId} has no processed data`)
 					exportResults.push({ orderId: lineItemId, success: false, error: 'No processed data available' })
 					errorCount++
 					continue
 				}
+				
 				const lineItemIndex = parseInt(lineItemId.split('-').pop() || '0')
-				console.log(`Exporting line item index: ${lineItemIndex}`)
+				console.log(`Line item index: ${lineItemIndex}`)
+				
 				if (lineItemIndex >= processedData.length) {
 					console.error(`Line item index ${lineItemIndex} out of range (max: ${processedData.length - 1})`)
 					exportResults.push({ orderId: lineItemId, success: false, error: 'Line item index out of range' })
 					errorCount++
 					continue
 				}
+				
 				const lineItemData = processedData[lineItemIndex]
 				console.log(`Line item data:`, {
 					deliveryOrderNo: lineItemData.deliveryOrderNo,
@@ -1598,18 +1642,60 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 					address: lineItemData.address,
 					recipientPhoneNo: lineItemData.recipientPhoneNo
 				})
-				// Convert to Detrack format (extract the job object from the data array)
-				const payload = convertToDetrackFormat(lineItemData, order.shopify_order_name)
-				if (payload && payload.data && payload.data[0]) {
-					jobs.push(payload.data[0])
-				} else {
-					exportResults.push({ orderId: lineItemId, success: false, error: 'Failed to convert to Detrack format' })
-					errorCount++
+				
+				// Add to order group
+				if (!orderGroups.has(baseOrderId)) {
+					orderGroups.set(baseOrderId, {
+						order: order,
+						lineItems: [],
+						lineItemIds: []
+					})
 				}
+				
+				const group = orderGroups.get(baseOrderId)!
+				group.lineItems.push(lineItemData)
+				group.lineItemIds.push(lineItemId)
+				
 			} catch (error: any) {
-				console.error(`Error preparing order ${lineItemId} for Detrack:`, error)
+				console.error(`Error processing line item ${lineItemId} for grouping:`, error)
 				exportResults.push({ orderId: lineItemId, success: false, error: error.message })
 				errorCount++
+			}
+		}
+		
+		console.log(`\n--- Grouped ${orderGroups.size} orders for export ---`)
+		for (const [baseOrderId, group] of orderGroups) {
+			console.log(`Order ${baseOrderId}: ${group.lineItems.length} line items`)
+		}
+
+		const jobs = []
+		const orderIdMapping = new Map<string, string[]>() // Maps job index to line item IDs
+
+		// Process each order group
+		for (const [baseOrderId, group] of orderGroups) {
+			try {
+				console.log(`\n--- Converting order ${baseOrderId} with ${group.lineItems.length} line items to Detrack format ---`)
+				
+				// Convert all line items for this order into a single Detrack job
+				const payload = convertMultipleLineItemsToDetrackFormat(group.lineItems, group.order.shopify_order_name)
+				
+				if (payload && payload.data && payload.data[0]) {
+					jobs.push(payload.data[0])
+					orderIdMapping.set(jobs.length - 1, group.lineItemIds) // Map job index to line item IDs
+					console.log(`Successfully converted order ${baseOrderId} to Detrack job`)
+				} else {
+					console.error(`Failed to convert order ${baseOrderId} to Detrack format`)
+					group.lineItemIds.forEach(lineItemId => {
+						exportResults.push({ orderId: lineItemId, success: false, error: 'Failed to convert to Detrack format' })
+						errorCount++
+					})
+				}
+			} catch (error: any) {
+				console.error(`Error converting order ${baseOrderId} to Detrack format:`, error)
+				group.lineItemIds.forEach(lineItemId => {
+					exportResults.push({ orderId: lineItemId, success: false, error: error.message })
+					errorCount++
+				})
 			}
 		}
 
@@ -1648,22 +1734,37 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 		if (response.ok && detrackResult && detrackResult.data && Array.isArray(detrackResult.data)) {
 			for (let i = 0; i < detrackResult.data.length; i++) {
 				const job = detrackResult.data[i]
-				const orderId = orderIds[i]
-				try {
-					const baseOrderId = orderId.split('-').slice(0, -1).join('-')
-					await db.updateOrder(baseOrderId, {
-						status: 'Exported',
-						exported_at: new Date().toISOString(),
-						updated_at: new Date().toISOString()
-					})
-					exportResults.push({ orderId, success: true, detrackResponse: job })
-					successCount++
-				} catch (e) {
-					exportResults.push({ orderId, success: false, error: 'Exported but failed to update local status' })
-					errorCount++
+				const lineItemIds = orderIdMapping.get(i)
+				if (lineItemIds) {
+					try {
+						// Get the base order ID from the first line item ID
+						const baseOrderId = lineItemIds[0].split('-').slice(0, -1).join('-')
+						
+						// Update the base order status (not individual line items)
+						await db.updateOrder(baseOrderId, {
+							status: 'Exported',
+							exported_at: new Date().toISOString(),
+							updated_at: new Date().toISOString()
+						})
+						
+						// Mark all line items as successful
+						lineItemIds.forEach(lineItemId => {
+							exportResults.push({ orderId: lineItemId, success: true, detrackResponse: job })
+							successCount++
+						})
+						
+						console.log(`Successfully exported order ${baseOrderId} with ${lineItemIds.length} line items`)
+					} catch (e) {
+						console.error(`Error updating order status for job ${i}:`, e)
+						lineItemIds.forEach(lineItemId => {
+							exportResults.push({ orderId: lineItemId, success: false, error: 'Exported but failed to update local status' })
+							errorCount++
+						})
+					}
 				}
 			}
 		} else {
+			console.error('Bulk export failed:', detrackResult)
 			exportResults.push({ orderId: 'bulk', success: false, error: 'Bulk export failed', detrackResponse: detrackResult })
 			errorCount += orderIds.length
 		}
@@ -1794,6 +1895,95 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 	}
 	
 	console.log('Converted to Detrack format:', payload)
+	return payload
+}
+
+// New function to convert multiple line items into a single Detrack job
+function convertMultipleLineItemsToDetrackFormat(lineItems: any[], orderName: string): any {
+	console.log(`Converting ${lineItems.length} line items to single Detrack job for order: ${orderName}`)
+	
+	if (lineItems.length === 0) {
+		console.error('No line items provided')
+		return null
+	}
+	
+	// Use the first line item as the base for common fields
+	const baseItem = lineItems[0]
+	
+	// Helper function to safely get field value
+	const getField = (field: string, defaultValue: string = '') => {
+		const value = baseItem[field]
+		return value && value.toString().trim() !== '' ? value.toString().trim() : defaultValue
+	}
+	
+	// Helper function to clean phone number (remove country code if present)
+	const cleanPhoneNumber = (phone: string) => {
+		if (!phone) return ''
+		// Remove +65 country code if present
+		return phone.replace(/^\+65/, '').replace(/^65/, '')
+	}
+
+	// Helper function to get delivery date in DD/MM/YYYY format
+	const getDeliveryDate = () => {
+		const deliveryDate = getField('deliveryDate')
+		if (deliveryDate) {
+			// If it's already in DD/MM/YYYY format, return as is
+			if (deliveryDate.includes('/')) {
+				const parts = deliveryDate.split('/')
+				if (parts.length === 3) {
+					return deliveryDate
+				}
+			}
+			// If it's in YYYY-MM-DD format, convert to DD/MM/YYYY
+			if (deliveryDate.includes('-') && deliveryDate.length === 10) {
+				const parts = deliveryDate.split('-')
+				if (parts.length === 3) {
+					return `${parts[2]}/${parts[1]}/${parts[0]}`
+				}
+			}
+			return deliveryDate
+		}
+		// Default to today if no date
+		const today = new Date()
+		return `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`
+	}
+	
+	// Create items array from all line items
+	const items = lineItems.map(item => ({
+		"sku": item.sku || '',
+		"description": item.description || '',
+		"quantity": parseInt(item.qty || '1')
+	}))
+	
+	console.log(`Created ${items.length} items for Detrack job:`, items.map(item => item.description))
+	
+	// Create payload according to Detrack API v2 specification
+	const payload = {
+		"data": [
+			{
+				"type": "Delivery",
+				"do_number": getField('deliveryOrderNo', orderName).replace('#', ''),
+				"date": getDeliveryDate(),
+				"tracking_number": getField('trackingNo', 'T0'),
+				"order_number": getField('senderNumberOnApp', ''),
+				"invoice_number": getField('senderNameOnApp', ''),
+				"address": getField('address', ''),
+				"deliver_to_collect_from": getField('firstName', ''),
+				"last_name": getField('lastName', ''),
+				"phone_number": cleanPhoneNumber(getField('recipientPhoneNo', '')),
+				"notify_email": getField('emailsForNotifications', ''),
+				"instructions": getField('instructions', ''),
+				"postal_code": getField('postalCode', ''),
+				"group_name": getField('group', ''),
+				"job_release_time": getField('jobReleaseTime', ''),
+				"time_window": getField('deliveryCompletionTimeWindow', ''),
+				"number_of_shipping_labels": parseInt(getField('noOfShippingLabels', '1')),
+				"items": items
+			}
+		]
+	}
+	
+	console.log('Converted multiple line items to Detrack format:', payload)
 	return payload
 }
 

@@ -56,6 +56,13 @@ export function Dashboard({
     startWidth: number
   } | null>(null)
   
+  // Helper function to extract base order ID from line item ID
+  const getBaseOrderId = (lineItemId: string): string => {
+    // Line item IDs have format: "orderId-index" (e.g., "cf3d7af2-2675-4cd4-99bc-dade2374cf6f-0")
+    // We need to extract just the orderId part
+    return lineItemId.includes('-') ? lineItemId.split('-').slice(0, -1).join('-') : lineItemId
+  }
+  
   // Load global field mappings from storage
   const [globalFieldMappings, setGlobalFieldMappings] = useState<any[]>([])
   useEffect(() => {
@@ -538,15 +545,50 @@ export function Dashboard({
 
     if (confirm(`Are you sure you want to delete ${selectedOrders.size} selected order(s)?`)) {
       try {
-        // Delete selected orders from database
-        const deletePromises = Array.from(selectedOrders).map(orderId =>
-          fetch(`/api/orders/${orderId}`, { 
-            method: 'DELETE', 
-            credentials: 'include' 
+        console.log(`Attempting to delete ${selectedOrders.size} orders...`)
+        
+        // Convert line item IDs to base order IDs and remove duplicates
+        const baseOrderIds = Array.from(selectedOrders).map(getBaseOrderId)
+        const uniqueOrderIds = [...new Set(baseOrderIds)]
+        
+        console.log(`Selected line items: ${Array.from(selectedOrders).join(', ')}`)
+        console.log(`Unique base order IDs: ${uniqueOrderIds.join(', ')}`)
+        
+        // Delete selected orders from database with proper error handling
+        const deleteResults = await Promise.allSettled(
+          uniqueOrderIds.map(async (orderId) => {
+            console.log(`Deleting order: ${orderId}`)
+            const response = await fetch(`/api/orders/${orderId}`, { 
+              method: 'DELETE', 
+              credentials: 'include' 
+            })
+            
+            if (!response.ok) {
+              const errorText = await response.text()
+              throw new Error(`HTTP ${response.status}: ${errorText}`)
+            }
+            
+            const result = await response.json()
+            console.log(`Successfully deleted order: ${orderId}`, result)
+            return { orderId, success: true }
           })
         )
         
-        await Promise.all(deletePromises)
+        // Count successes and failures
+        const successful = deleteResults.filter(result => result.status === 'fulfilled').length
+        const failed = deleteResults.filter(result => result.status === 'rejected').length
+        
+        console.log(`Delete operation completed: ${successful} successful, ${failed} failed`)
+        
+        if (failed > 0) {
+          const errors = deleteResults
+            .filter(result => result.status === 'rejected')
+            .map(result => (result as PromiseRejectedResult).reason?.message || 'Unknown error')
+          console.error('Delete errors:', errors)
+          setFetchResult(`Deleted ${successful} orders, but ${failed} failed: ${errors.join(', ')}`)
+        } else {
+          setFetchResult(`Successfully deleted ${successful} order(s)`)
+        }
         
         // Refresh orders from database, reset to page 1
         await loadOrdersFromDatabase(1, pageSize)
@@ -554,10 +596,8 @@ export function Dashboard({
         // Clear selection
         setSelectedOrders(new Set())
         
-        // Show success message
-        setFetchResult(`Successfully deleted ${selectedOrders.size} order(s)`)
       } catch (error: any) {
-        console.error('Error deleting orders:', error)
+        console.error('Error in bulk delete operation:', error)
         setFetchResult('Error deleting orders: ' + error.message)
       }
     }
@@ -567,26 +607,31 @@ export function Dashboard({
   const handleClearAllOrders = async () => {
     if (confirm('Are you sure you want to delete all orders from the database and start fresh?')) {
       try {
-        console.log('Starting clear all orders operation...')
+        console.log('=== FRONTEND: Starting clear all orders operation ===')
+        console.log('Current orders count:', orders.length)
+        console.log('Current page:', currentPage)
+        console.log('Page size:', pageSize)
         
         // Delete all orders from database using bulk endpoint
+        console.log('FRONTEND: Making DELETE request to /api/orders/clear-all')
         const response = await fetch('/api/orders/clear-all', { 
           method: 'DELETE', 
           credentials: 'include' 
         })
         
-        console.log('Clear all response status:', response.status)
+        console.log('FRONTEND: Clear all response status:', response.status)
+        console.log('FRONTEND: Response headers:', Object.fromEntries(response.headers.entries()))
         
         if (!response.ok) {
           const errorText = await response.text()
-          console.error('Clear all error response:', errorText)
+          console.error('FRONTEND: Clear all error response:', errorText)
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
         
         const responseData = await response.json()
-        console.log('Clear all response data:', responseData)
+        console.log('FRONTEND: Clear all response data:', responseData)
         
-        console.log('Refreshing orders from database...')
+        console.log('FRONTEND: Refreshing orders from database...')
         // Refresh orders from database, reset to page 1
         await loadOrdersFromDatabase(1, pageSize)
         
@@ -595,9 +640,12 @@ export function Dashboard({
         
         // Show success message
         setFetchResult('Successfully cleared all orders from the database')
-        console.log('Clear all orders operation completed successfully')
+        console.log('FRONTEND: Clear all orders operation completed successfully')
       } catch (error: any) {
-        console.error('Error clearing orders:', error)
+        console.error('=== FRONTEND: Error clearing orders ===')
+        console.error('Error details:', error)
+        console.error('Error message:', error.message)
+        console.error('Error stack:', error.stack)
         setFetchResult('Error clearing orders: ' + error.message)
       }
     }

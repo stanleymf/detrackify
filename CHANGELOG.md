@@ -2,6 +2,220 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.2] - 2025-06-20
+
+### Fixed
+- **Clear All Orders** - Fixed routing conflict that prevented "Clear All Orders" functionality from working
+- **Route Priority** - Moved specific `/api/orders/clear-all` route before general `/api/orders/` route to prevent incorrect matching
+- **Order Deletion** - Resolved 404 "Order not found" error when attempting to clear all orders
+
+### Changed
+- **Route Ordering** - Reordered API routes to ensure specific endpoints are matched before general patterns
+- **Error Handling** - Enhanced logging for debugging order clearing operations
+
+### Technical Improvements
+- **Route Matching** - Fixed route matching logic to prevent conflicts between specific and general patterns
+- **Debug Logging** - Added comprehensive logging for order clearing operations in both frontend and backend
+
+## [0.13.1] - 2025-06-20
+
+### Fixed
+- **Webhook Processing** - Enhanced error handling for webhooks with deleted or invalid orders
+- **Order Fetching** - Improved error messages when Shopify orders are not found during webhook processing
+- **Webhook Resilience** - Webhook handler now gracefully skips orders that cannot be fetched from Shopify API
+
+### Changed
+- **Error Handling** - Better error reporting for webhook processing failures
+- **Logging** - Enhanced logging to identify webhook processing issues
+
+### Technical Improvements
+- **Webhook Validation** - Added checks for order existence before processing
+- **API Error Handling** - Improved handling of 404 errors from Shopify API
+- **Debug Information** - Added detailed error messages for troubleshooting
+
+## [0.13.0] - 2025-06-20
+
+### Added
+- **Enhanced Detrack Export** - Orders with multiple line items now export as single jobs with multiple items
+- **Line Item Grouping** - Automatic grouping of line items by base order ID during export
+- **Multi-Item Support** - Detrack jobs now include all line item descriptions in a single order
+- **Improved Export Logic** - New `convertMultipleLineItemsToDetrackFormat()` function for better order handling
+
+### Changed
+- **Export Behavior** - Orders like #WF76530 with 2 line items now create 1 Detrack job instead of 2 separate jobs
+- **Status Management** - Base order status is updated when all line items are successfully exported
+- **Export Results** - Better tracking of line item success/failure during bulk exports
+
+### Technical Improvements
+- **Order Grouping Algorithm** - Intelligent grouping of line items by base order ID
+- **Enhanced Logging** - Detailed logs showing order grouping and conversion process
+- **Error Handling** - Improved error handling for multi-line item exports
+
+## [0.12.0] - 2025-06-20
+
+### Fixed
+- **Database Schema Mismatch** - Fixed critical issue where orders were not being saved due to schema mismatch between code and database
+- **Orders Table Schema** - Updated remote D1 database schema to match code expectations with `processed_data` and `raw_shopify_data` JSON columns
+- **Order Processing** - Resolved `NOT NULL constraint failed: orders.order_number` error that prevented order saves
+- **Webhook Processing** - Orders from Shopify fulfillment webhooks now save successfully to database
+- **Dashboard Order Display** - Orders now appear in dashboard after fulfillment events
+- **Order Deletion** - Fixed individual order deletion functionality in dashboard
+
+### Changed
+- **Database Schema** - Migrated from old field-by-field orders table to new JSON-based schema for better flexibility
+- **TypeScript Interfaces** - Added proper `DatabaseOrder` interface and updated type definitions
+- **Authentication** - Moved order deletion route to protected routes section for proper authentication
+
+### Technical Improvements
+- **Database Migration** - Direct schema update to remote D1 database to resolve migration system limitations
+- **Error Handling** - Enhanced error handling and debugging for order operations
+- **Frontend Logic** - Fixed line item ID to base order ID conversion for proper deletion
+
+## [0.11.0] - 2025-06-19
+
+### Added
+- **Product Management System** - Complete product sync, filtering, and labeling functionality
+- **Tag-Based Filtering** - Filter products by Shopify tags with custom tag filters
+- **Title-Based Filtering** - Filter products by title patterns with custom title filters
+- **Product Labeling** - Apply custom labels to products for better organization
+- **Bulk Operations** - Bulk save and label application for multiple products
+- **Product Sync Status** - Track sync status and progress for product operations
+
+### Changed
+- **Enhanced Product Processing** - Improved product data extraction and processing
+- **Better Error Handling** - More robust error handling for product operations
+- **UI Improvements** - Enhanced product management interface
+
+## [0.10.0] - 2025-06-18
+
+### Added
+- **Detrack Integration** - Complete Detrack API v2 integration for delivery job management
+- **Detrack Configuration** - Configurable API key, base URL, and connection settings
+- **Detrack Testing** - Multiple test endpoints for connection validation and API testing
+- **Job Export** - Export processed orders to Detrack as delivery jobs
+- **Job Management** - View and manage Detrack jobs through the API
+
+### Changed
+- **Order Processing** - Enhanced order processing to support Detrack export format
+- **API Structure** - Updated API endpoints to support Detrack operations
+- **Configuration Management** - Improved configuration storage and retrieval
+
+## [0.9.0] - 2025-06-17
+
+### Added
+- **Global Field Mappings** - Configurable field mappings for order processing
+- **Extract Processing Mappings** - Advanced field extraction and processing rules
+- **Order Reprocessing** - Reprocess existing orders with updated mappings
+- **Enhanced Order Display** - Better order data presentation in dashboard
+
+### Changed
+- **Order Processing Logic** - Improved order data extraction and transformation
+- **Mapping System** - More flexible and powerful field mapping capabilities
+- **Data Validation** - Enhanced validation for order data processing
+
+## [0.8.0] - 2025-06-16
+
+### Added
+- **Shopify Webhook Integration** - Real-time order fulfillment webhook processing
+- **Webhook Registration** - Automatic webhook registration for Shopify stores
+- **Order Status Tracking** - Track order status from fulfillment to export
+- **Webhook Security** - HMAC validation for webhook authenticity
+
+### Changed
+- **Order Processing** - Real-time order processing from Shopify webhooks
+- **Database Schema** - Updated to support webhook data and order status tracking
+- **Error Handling** - Enhanced error handling for webhook processing
+
+## [0.7.0] - 2025-06-15
+
+### Added
+- **Store Management** - Complete Shopify store management system
+- **Store Configuration** - Configurable store settings and API credentials
+- **Multi-Store Support** - Support for multiple Shopify stores
+- **Store-Specific Mappings** - Individual field mappings per store
+
+### Changed
+- **Database Schema** - Added stores table and related configurations
+- **API Structure** - Updated to support multi-store operations
+- **Authentication** - Enhanced authentication for store management
+
+## [0.6.0] - 2025-06-14
+
+### Added
+- **Order Management** - Complete order processing and management system
+- **Order Dashboard** - Visual order management interface
+- **Order Export** - Export orders to external systems
+- **Order Filtering** - Filter orders by various criteria
+
+### Changed
+- **Database Schema** - Added orders table and related structures
+- **API Endpoints** - Added order management endpoints
+- **UI Components** - Enhanced dashboard with order management features
+
+## [0.5.0] - 2025-06-13
+
+### Added
+- **Authentication System** - Complete user authentication and session management
+- **User Registration** - User registration and account creation
+- **Login/Logout** - Secure login and logout functionality
+- **Session Management** - Persistent session handling
+
+### Changed
+- **Security** - Enhanced security with JWT tokens and session management
+- **Database Schema** - Added users table and authentication structures
+- **API Protection** - Protected API endpoints with authentication
+
+## [0.4.0] - 2025-06-12
+
+### Added
+- **Database Integration** - D1 database integration for data persistence
+- **Data Models** - Structured data models for application entities
+- **Database Operations** - CRUD operations for all data entities
+- **Data Validation** - Input validation and data integrity checks
+
+### Changed
+- **Data Storage** - Migrated from local storage to database storage
+- **API Structure** - Updated API to use database operations
+- **Error Handling** - Enhanced error handling for database operations
+
+## [0.3.0] - 2025-06-11
+
+### Added
+- **API Endpoints** - Complete REST API for application functionality
+- **Request Handling** - Proper request routing and handling
+- **Response Formatting** - Standardized API response formats
+- **Error Handling** - Comprehensive error handling and status codes
+
+### Changed
+- **Architecture** - Updated to use proper API architecture
+- **Data Flow** - Improved data flow between frontend and backend
+- **Security** - Enhanced security with proper request validation
+
+## [0.2.0] - 2025-06-10
+
+### Added
+- **UI Components** - Complete set of reusable UI components
+- **Dashboard Interface** - Main application dashboard
+- **Settings Panel** - Configuration and settings interface
+- **Responsive Design** - Mobile-responsive design implementation
+
+### Changed
+- **User Interface** - Complete UI overhaul with modern design
+- **Component Structure** - Organized component hierarchy
+- **Styling** - Updated styling with Tailwind CSS
+
+## [0.1.0] - 2025-06-09
+
+### Added
+- **Initial Setup** - Basic project structure and configuration
+- **Cloudflare Workers** - Worker-based backend infrastructure
+- **React Frontend** - React-based frontend application
+- **Build System** - Vite-based build and deployment system
+
+### Changed
+- **Project Structure** - Organized project structure for scalability
+- **Development Environment** - Configured development and production environments
+
 ## [0.12.0] - 2025-06-20
 
 ### Fixed
