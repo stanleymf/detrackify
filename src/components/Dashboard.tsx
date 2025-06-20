@@ -38,12 +38,14 @@ export function Dashboard({
   const [editValue, setEditValue] = useState('')
   const [selectedDate, setSelectedDate] = useState<string>('all')
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>('all')
+  const [orderTagFilter, setOrderTagFilter] = useState<string>('')
   const [columnConfigs, setColumnConfigs] = useState<DashboardColumnConfig[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(200)
   const [totalOrderCount, setTotalOrderCount] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [productLabels, setProductLabels] = useState<any[]>([])
+  const [savedProducts, setSavedProducts] = useState<any[]>([])
 
   const isMobile = useIsMobile()
   const actualViewMode = viewMode === 'auto' ? (isMobile ? 'mobile' : 'desktop') : viewMode
@@ -116,6 +118,26 @@ export function Dashboard({
     }
     
     loadProductLabels()
+  }, [])
+
+  // Load saved products with labels from server
+  useEffect(() => {
+    const loadSavedProducts = async () => {
+      try {
+        // Get all saved products from all stores
+        const response = await fetch('/api/saved-products', {
+          credentials: 'include'
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setSavedProducts(data.savedProducts || [])
+        }
+      } catch (error) {
+        console.error('Error loading saved products:', error)
+      }
+    }
+    
+    loadSavedProducts()
   }, [])
 
   // Filter orders based on date and timeslot
@@ -415,16 +437,31 @@ export function Dashboard({
   
   const expressOrdersArray = Array.from(uniqueExpressOrders.values())
 
-  // Get product names that have label "Stand"
-  const standProductNames = productLabels
-    .filter(product => product.label.toLowerCase() === 'stand')
-    .map(product => product.productName.toLowerCase())
+  // Get product names that have label "stands" from saved products
+  const standProductNames = savedProducts
+    .filter(product => product.label && product.label.toLowerCase() === 'stands')
+    .map(product => product.title.toLowerCase())
+
+  console.log('=== FLOWER STANDS DEBUG ===')
+  console.log('Saved Products loaded:', savedProducts)
+  console.log('Total saved products:', savedProducts.length)
+  console.log('Stands Product Names:', standProductNames)
+  console.log('Stands product count:', standProductNames.length)
+  console.log('Filtered Orders count:', filteredOrders.length)
+  console.log('Sample order descriptions:', filteredOrders.slice(0, 3).map(o => o.description))
 
   // Filter orders for Flower Stands
   const flowerStandOrders = filteredOrders.filter(order => {
     const description = (order.description || '').toLowerCase()
-    return standProductNames.some(productName => description.includes(productName))
+    const matches = standProductNames.some(productName => description.includes(productName))
+    if (matches) {
+      console.log('Flower Stand match found:', { orderId: order.id, description, matchingProduct: standProductNames.find(name => description.includes(name)) })
+    }
+    return matches
   })
+
+  console.log('Flower Stand Orders found:', flowerStandOrders.length)
+  console.log('=== END FLOWER STANDS DEBUG ===')
 
   // Group flower stand orders by unique order (to avoid duplicates from line items)
   const uniqueFlowerStandOrders = new Map<string, { deliveryOrderNo: string; fullLineItem: string; address: string }>()
@@ -494,7 +531,22 @@ export function Dashboard({
     setFetchingOrders(true)
     setFetchResult(null)
     try {
-      const response = await fetch('/api/fetch-orders', { method: 'POST', credentials: 'include' })
+      // Parse tag filter - split by commas and trim whitespace
+      const tags = orderTagFilter
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0)
+      
+      const requestBody = tags.length > 0 ? { tags } : {}
+      
+      const response = await fetch('/api/fetch-orders', { 
+        method: 'POST', 
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody),
+        credentials: 'include' 
+      })
       const data = await response.json()
       
       if (data.success) {
@@ -796,7 +848,22 @@ export function Dashboard({
             </div>
           ) : (
             <div className="text-center text-muted-foreground text-sm py-4">
-              No Flower Stands found
+              {savedProducts.length === 0 ? (
+                <div>
+                  <p>No saved products found</p>
+                  <p className="text-xs mt-1">Go to Info page → Saved Products to add products</p>
+                </div>
+              ) : standProductNames.length === 0 ? (
+                <div>
+                  <p>No products with 'stands' label found</p>
+                  <p className="text-xs mt-1">Apply 'stands' label to flower stand products in Info page</p>
+                </div>
+              ) : (
+                <div>
+                  <p>No Flower Stands found</p>
+                  <p className="text-xs mt-1">Orders must contain products labeled as 'stands'</p>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -819,14 +886,25 @@ export function Dashboard({
         >
           Clear All Orders
         </Button>
-        <Button 
-          onClick={handleFetchOrders} 
-          disabled={fetchingOrders} 
-          className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white"
-        >
-          <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
-          {fetchingOrders ? "Fetching..." : "Fetch Orders from Shopify"}
-        </Button>
+        
+        {/* Tag Filter Input */}
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Filter by tags (comma-separated)"
+            value={orderTagFilter}
+            onChange={(e) => setOrderTagFilter(e.target.value)}
+            className="w-64"
+          />
+          <Button 
+            onClick={handleFetchOrders} 
+            disabled={fetchingOrders} 
+            className="flex items-center gap-2 bg-olive-600 hover:bg-olive-700 text-white"
+          >
+            <RefreshCw className={fetchingOrders ? "animate-spin" : ""} />
+            {fetchingOrders ? "Fetching..." : "Fetch Orders from Shopify"}
+          </Button>
+        </div>
+        
         <Button 
           onClick={handleReprocessOrders} 
           disabled={fetchingOrders} 

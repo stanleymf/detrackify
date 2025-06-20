@@ -1107,12 +1107,21 @@ async function handleSaveGlobalFieldMappings(request: Request, db: DatabaseServi
 	}
 }
 
-async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, extractMappings: any): Promise<{ storeId: string, storeName: string, fetched: number, saved: number, errors: string[] }> {
+async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, extractMappings: any, tags?: string[]): Promise<{ storeId: string, storeName: string, fetched: number, saved: number, errors: string[] }> {
 	const results = { storeId: store.id, storeName: store.store_name, fetched: 0, saved: 0, errors: [] as string[] }
 	try {
 		console.log(`Fetching orders from Shopify store: ${store.store_name} (${store.shopify_domain})`)
-		// Shopify REST Admin API endpoint for orders
-		const apiUrl = `https://${store.shopify_domain}/admin/api/${store.api_version || '2024-01'}/orders.json?status=any&limit=200`
+		
+		// Build API URL with optional tag filtering
+		let apiUrl = `https://${store.shopify_domain}/admin/api/${store.api_version || '2024-01'}/orders.json?status=any&limit=200`
+		
+		// Add tag filtering if tags are provided
+		if (tags && tags.length > 0) {
+			const tagParam = tags.map(tag => encodeURIComponent(tag.trim())).join(',')
+			apiUrl += `&tag=${tagParam}`
+			console.log(`Adding tag filter to API call: ${tagParam}`)
+		}
+		
 		console.log(`Making API call to: ${apiUrl}`)
 		
 		const response = await fetch(apiUrl, {
@@ -1133,7 +1142,7 @@ async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, 
 		
 		const data = await response.json()
 		const shopifyOrders: any[] = data.orders || []
-		console.log(`Received ${shopifyOrders.length} orders from Shopify`)
+		console.log(`Received ${shopifyOrders.length} orders from Shopify${tags && tags.length > 0 ? ` (filtered by tags: ${tags.join(', ')})` : ''}`)
 		results.fetched = shopifyOrders.length
 		
 		for (const shopifyOrder of shopifyOrders) {
@@ -1182,6 +1191,20 @@ async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, 
 async function handleFetchOrders(request: Request, db: DatabaseService): Promise<Response> {
 	try {
 		console.log('Starting fetch orders process...')
+		
+		// Parse request body for optional tag filtering
+		let tags: string[] | undefined
+		try {
+			const requestBody = await request.json()
+			if (requestBody.tags && Array.isArray(requestBody.tags)) {
+				tags = requestBody.tags.filter((tag: string) => tag && tag.trim())
+				console.log(`Tag filtering requested: ${tags.join(', ')}`)
+			}
+		} catch (e) {
+			// No request body or invalid JSON - continue without tags
+			console.log('No tag filtering specified in request')
+		}
+		
 		const stores = await db.getAllStores()
 		console.log(`Found ${stores.length} stores in database:`, stores.map((s: any) => ({ id: s.id, name: s.store_name, domain: s.shopify_domain })))
 		
@@ -1203,11 +1226,11 @@ async function handleFetchOrders(request: Request, db: DatabaseService): Promise
 		])
 		console.log(`Loaded ${globalMappings.length} global mappings and ${extractMappings.length} extract mappings`)
 		
-		const results: Array<{ orderId: string, success: boolean, error?: string, detrackResponse?: any }> = []
+		const results: Array<{ storeId: string, storeName: string, fetched: number, saved: number, errors: string[] }> = []
 		
 		for (const store of stores) {
 			console.log(`Processing store: ${store.store_name} (${store.shopify_domain})`)
-			const res = await fetchOrdersFromShopify(db, store, globalMappings, extractMappings)
+			const res = await fetchOrdersFromShopify(db, store, globalMappings, extractMappings, tags || [])
 			console.log(`Store ${store.store_name} result:`, res)
 			results.push(res)
 		}

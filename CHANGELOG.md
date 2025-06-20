@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.8] - 2025-06-20
+
+### Fixed
+- **Flower Stands Card Integration** - Fixed Flower Stands card to use Saved Products system instead of Product Labels system
+- **Label System Sync** - Flower Stands card now properly reads labels from Saved Products where users actually configure them
+- **Data Source Alignment** - Aligned Flower Stands filtering with the actual labeling system being used
+
+### Changed
+- **Flower Stands Data Source** - Now loads from `/api/saved-products` instead of `/api/config/product-labels`
+- **Product Name Matching** - Uses `product.title` from Saved Products instead of `product.productName` from Product Labels
+- **Debug Information** - Updated debug logging to show Saved Products data instead of Product Labels
+
+### Technical Improvements
+- **System Consistency** - Eliminated confusion between two separate labeling systems
+- **User Experience** - Flower Stands card now works with labels applied in Saved Products section
+- **Data Integrity** - Single source of truth for product labels and filtering
+
+## [0.13.7] - 2025-06-20
+
+### Changed
+- **Flower Stands Label** - Updated Flower Stands card to check for label 'stands' instead of 'stand'
+- **Product Label Matching** - Flower Stands filtering now uses 'stands' label for better consistency
+- **Debug Logging** - Added console logging to help diagnose Flower Stands card functionality
+
+### Technical Improvements
+- **Label Consistency** - Aligned Flower Stands card with 'stands' label naming convention
+- **Debug Information** - Enhanced logging to show product labels and matching results
+
+## [0.13.6] - 2025-06-20
+
+### Added
+- **Tag-Based Order Fetching** - Added ability to filter orders by Shopify tags when fetching from Shopify
+- **Enhanced Fetch Orders** - Orders can now be fetched with specific tag filters (comma-separated)
+- **Tag Filter Input** - Added tag filter input field in Dashboard for specifying order tags
+- **Multi-Tag Support** - Support for multiple tags separated by commas (e.g., "urgent,express,same-day")
+
+### Changed
+- **Fetch Orders API** - Modified `/api/fetch-orders` endpoint to accept optional `tags` parameter in request body
+- **Shopify API Integration** - Enhanced `fetchOrdersFromShopify` function to use Shopify's tag filtering
+- **Dashboard UI** - Added tag filter input field before the "Fetch Orders from Shopify" button
+
+### Technical Improvements
+- **Backend Enhancement** - Modified `handleFetchOrders` to parse and validate tag filters from request
+- **API Flexibility** - Fetch orders now supports both unfiltered (all orders) and tag-filtered requests
+- **Error Handling** - Improved error handling for tag filtering with proper validation
+
+### Usage
+- **Tag Filtering**: Enter tags separated by commas in the tag filter input (e.g., "urgent,express")
+- **All Orders**: Leave tag filter empty to fetch all orders (existing behavior)
+- **Shopify Integration**: Uses Shopify's native tag filtering API for efficient order retrieval
+
 ## [0.13.5] - 2025-06-20
 
 ### Fixed
