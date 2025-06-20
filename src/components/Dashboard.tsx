@@ -447,15 +447,12 @@ export function Dashboard({
   const loadOrdersFromDatabase = async (page = currentPage, size = pageSize) => {
     try {
       setLoadingOrders(true)
-      console.log(`Loading orders from database... page ${page}, size ${size}`)
       
       const offset = (page - 1) * size
       const response = await fetch(`/api/orders?limit=${size}&offset=${offset}`, { credentials: 'include' })
-      console.log('Load orders response status:', response.status)
       
       if (response.ok) {
         const data = await response.json()
-        console.log('Orders loaded from database:', data)
         
         // Handle both array response (current) and object response (legacy)
         let ordersArray: Order[]
@@ -475,12 +472,9 @@ export function Dashboard({
           totalCount = 0
         }
         
-        console.log('Number of orders loaded:', ordersArray.length)
-        console.log('Sample order:', ordersArray[0] || 'No orders')
         setOrders(ordersArray)
         setTotalOrderCount(totalCount)
         setCurrentPage(page)
-        console.log('Orders state updated with', ordersArray.length, 'orders')
       } else {
         const errorText = await response.text()
         console.error('Failed to load orders from database:', errorText)
@@ -502,10 +496,8 @@ export function Dashboard({
     setFetchingOrders(true)
     setFetchResult(null)
     try {
-      console.log('Fetching orders from Shopify...')
       const response = await fetch('/api/fetch-orders', { method: 'POST', credentials: 'include' })
       const data = await response.json()
-      console.log('Fetch response:', data)
       
       if (data.success) {
         // Show results summary first
@@ -522,7 +514,6 @@ export function Dashboard({
         await new Promise(resolve => setTimeout(resolve, 1000))
         
         // Refresh orders from database, reset to page 1 to see newest orders
-        console.log('Refreshing orders from database after fetch...')
         await loadOrdersFromDatabase(1, pageSize)
         
       } else {
@@ -545,19 +536,13 @@ export function Dashboard({
 
     if (confirm(`Are you sure you want to delete ${selectedOrders.size} selected order(s)?`)) {
       try {
-        console.log(`Attempting to delete ${selectedOrders.size} orders...`)
-        
         // Convert line item IDs to base order IDs and remove duplicates
         const baseOrderIds = Array.from(selectedOrders).map(getBaseOrderId)
         const uniqueOrderIds = [...new Set(baseOrderIds)]
         
-        console.log(`Selected line items: ${Array.from(selectedOrders).join(', ')}`)
-        console.log(`Unique base order IDs: ${uniqueOrderIds.join(', ')}`)
-        
         // Delete selected orders from database with proper error handling
         const deleteResults = await Promise.allSettled(
           uniqueOrderIds.map(async (orderId) => {
-            console.log(`Deleting order: ${orderId}`)
             const response = await fetch(`/api/orders/${orderId}`, { 
               method: 'DELETE', 
               credentials: 'include' 
@@ -569,7 +554,6 @@ export function Dashboard({
             }
             
             const result = await response.json()
-            console.log(`Successfully deleted order: ${orderId}`, result)
             return { orderId, success: true }
           })
         )
@@ -577,8 +561,6 @@ export function Dashboard({
         // Count successes and failures
         const successful = deleteResults.filter(result => result.status === 'fulfilled').length
         const failed = deleteResults.filter(result => result.status === 'rejected').length
-        
-        console.log(`Delete operation completed: ${successful} successful, ${failed} failed`)
         
         if (failed > 0) {
           const errors = deleteResults
@@ -607,31 +589,20 @@ export function Dashboard({
   const handleClearAllOrders = async () => {
     if (confirm('Are you sure you want to delete all orders from the database and start fresh?')) {
       try {
-        console.log('=== FRONTEND: Starting clear all orders operation ===')
-        console.log('Current orders count:', orders.length)
-        console.log('Current page:', currentPage)
-        console.log('Page size:', pageSize)
-        
         // Delete all orders from database using bulk endpoint
-        console.log('FRONTEND: Making DELETE request to /api/orders/clear-all')
         const response = await fetch('/api/orders/clear-all', { 
           method: 'DELETE', 
           credentials: 'include' 
         })
         
-        console.log('FRONTEND: Clear all response status:', response.status)
-        console.log('FRONTEND: Response headers:', Object.fromEntries(response.headers.entries()))
-        
         if (!response.ok) {
           const errorText = await response.text()
-          console.error('FRONTEND: Clear all error response:', errorText)
+          console.error('Clear all error response:', errorText)
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
         
         const responseData = await response.json()
-        console.log('FRONTEND: Clear all response data:', responseData)
         
-        console.log('FRONTEND: Refreshing orders from database...')
         // Refresh orders from database, reset to page 1
         await loadOrdersFromDatabase(1, pageSize)
         
@@ -640,12 +611,8 @@ export function Dashboard({
         
         // Show success message
         setFetchResult('Successfully cleared all orders from the database')
-        console.log('FRONTEND: Clear all orders operation completed successfully')
       } catch (error: any) {
-        console.error('=== FRONTEND: Error clearing orders ===')
-        console.error('Error details:', error)
-        console.error('Error message:', error.message)
-        console.error('Error stack:', error.stack)
+        console.error('Error clearing orders:', error)
         setFetchResult('Error clearing orders: ' + error.message)
       }
     }
@@ -657,13 +624,10 @@ export function Dashboard({
         setFetchingOrders(true)
         setFetchResult(null)
         
-        console.log('Starting order reprocessing...')
         const response = await fetch('/api/reprocess-orders', { 
           method: 'POST', 
           credentials: 'include' 
         })
-        
-        console.log('Reprocess response status:', response.status)
         
         if (!response.ok) {
           const errorText = await response.text()
@@ -672,14 +636,12 @@ export function Dashboard({
         }
         
         const responseData = await response.json()
-        console.log('Reprocess response data:', responseData)
         
         // Refresh orders from database, reset to page 1
         await loadOrdersFromDatabase(1, pageSize)
         
         // Show success message
         setFetchResult('Successfully reprocessed all orders from Shopify')
-        console.log('Order reprocessing completed successfully')
         
       } catch (error: any) {
         console.error('Error reprocessing orders:', error)

@@ -196,9 +196,6 @@ async function handleApiRoutes(
 	}
 
 	if (path === '/api/orders/clear-all' && request.method === 'DELETE') {
-		console.log('=== CLEAR ALL ORDERS ENDPOINT CALLED ===')
-		console.log('Request headers:', Object.fromEntries(request.headers.entries()))
-		console.log('Request URL:', request.url)
 		return handleClearAllOrders(db)
 	}
 
@@ -1339,9 +1336,6 @@ async function handleReprocessOrders(request: Request, db: DatabaseService): Pro
 
 async function handleClearAllOrders(db: DatabaseService): Promise<Response> {
 	try {
-		console.log('=== handleClearAllOrders: Starting bulk delete operation ===')
-		console.log('Database service instance:', !!db)
-		
 		// First, let's check how many orders exist before deletion
 		const ordersBefore = await db.getAllOrders(1000, 0)
 		console.log(`handleClearAllOrders: Found ${ordersBefore.length} orders before deletion`)

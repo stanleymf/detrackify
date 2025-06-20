@@ -32,3 +32,30 @@ dist-ssr
 
 # Wrangler
 .wrangler
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Test coverage
+coverage/
+*.lcov
+
+# Build artifacts
+build/
+out/
+
+# Package manager files
+yarn.lock
+package-lock.json
