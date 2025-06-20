@@ -8,7 +8,7 @@ POST https://app.detrack.com/api/v2/dn/jobs
 ## Request Headers
 ```
 Content-Type: application/json
-X-API-KEY: 7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4
+X-API-KEY: process.env.DETRACK_API_KEY
 Accept: application/json
 ```
 
@@ -54,7 +54,7 @@ This is a test request from our Shopify order integration app (Detrackify) to ve
 2. Are there any required fields missing from the payload?
 3. Is the date format (DD/MM/YYYY) correct?
 4. Are there any specific validation rules or constraints we should be aware of?
-5. Is the API key `7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4` properly configured for this endpoint?
+5. Is the API key `process.env.DETRACK_API_KEY` properly configured for this endpoint?
 
 ## Additional Information
 - This is a test connection, not a production order

@@ -148,15 +148,16 @@ export class OrderProcessor {
   extractGroup(): string {
     const orderName = this.order.name || ''
     
-    console.log(`Extracting group from order name: "${orderName}"`)
+    // Extract characters before the first number
+    const match = orderName.match(/^([^0-9]+)/)
+    let result = match && match[1] ? match[1].replace(/[^A-Za-z]/g, '') : ''
     
-    // Remove any non-alphabetic characters and get first two letters
-    const letters = orderName.replace(/[^A-Za-z]/g, '')
-    const result = letters.substring(0, 2).toUpperCase()
+    // If there are more than 2 characters, take the first two
+    if (result.length > 2) {
+      result = result.substring(0, 2)
+    }
     
-    console.log(`Letters found: "${letters}", Group result: "${result}"`)
-    
-    return result
+    return result.toUpperCase()
   }
 
   /**

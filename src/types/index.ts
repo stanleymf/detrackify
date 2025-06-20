@@ -35,6 +35,42 @@ export interface Order {
   qty: string
 }
 
+// Database Order interface - matches the actual database schema
+export interface DatabaseOrder {
+  id: string
+  store_id: string
+  shopify_order_id: number
+  shopify_order_name: string
+  status: string
+  processed_data: string // JSON string of processed order data
+  raw_shopify_data: string // JSON string of original Shopify data
+  created_at: string
+  updated_at: string
+  exported_at: string | null
+}
+
+// Store interface - matches the database schema
+export interface Store {
+  id: string
+  shopify_domain: string
+  access_token: string
+  api_version: string
+  webhook_secret: string | null
+  api_secret: string | null
+  store_name: string | null
+  created_at: string
+  updated_at: string
+}
+
+// User interface - matches the database schema
+export interface User {
+  id: string
+  email: string
+  password_hash: string
+  created_at: string
+  updated_at: string
+}
+
 export interface ShopifyStore {
   id: string
   name: string

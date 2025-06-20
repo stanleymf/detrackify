@@ -1346,7 +1346,7 @@ export default function Info({
             </div>
 
             {/* Search Bar */}
-            {filteredFetchedProducts.length > 0 && (
+            {sortedFetchedProducts.length > 0 && (
               <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -1448,6 +1448,10 @@ export default function Info({
                           <div className="flex items-center justify-center gap-2">
                             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
                             <span className="text-gray-600">Fetching products...</span>
+                          </div>
+                        ) : fetchedProductsSearchTerm.trim() ? (
+                          <div className="text-gray-500">
+                            No products found matching "{fetchedProductsSearchTerm}". Try adjusting your search terms.
                           </div>
                         ) : (
                           <div className="text-gray-500">

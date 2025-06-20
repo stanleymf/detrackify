@@ -1,5 +1,5 @@
 // Minimal test of Detrack API with the most basic payload possible
-const API_KEY = '7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4'
+const API_KEY = process.env.DETRACK_API_KEY
 
 async function testDetrackMinimal() {
   console.log('Testing Detrack API with minimal payload...\n')
@@ -50,7 +50,7 @@ async function testDetrackMinimal() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-KEY': API_KEY,
+          'X-API-KEY': process.env.DETRACK_API_KEY,
           'Accept': 'application/json'
         },
         body: JSON.stringify(testCase.payload)

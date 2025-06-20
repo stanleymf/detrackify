@@ -12,7 +12,7 @@ async function updateDetrackConfig() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        apiKey: '7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4', // Your correct API key
+        apiKey: 'process.env.DETRACK_API_KEY', // Your correct API key
         baseUrl: 'https://app.detrack.com/api/v2', // Correct v2 endpoint
         isEnabled: true
       })

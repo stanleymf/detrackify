@@ -1,5 +1,5 @@
 // Analyze the successful Detrack GET response to understand the correct structure
-const API_KEY = '7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4'
+const API_KEY = process.env.DETRACK_API_KEY
 
 async function analyzeDetrackResponse() {
   console.log('Analyzing successful Detrack GET response...\n')
@@ -9,7 +9,7 @@ async function analyzeDetrackResponse() {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-KEY': API_KEY,
+        'X-API-KEY': process.env.DETRACK_API_KEY,
         'Accept': 'application/json'
       }
     })

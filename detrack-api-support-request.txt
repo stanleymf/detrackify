@@ -10,7 +10,7 @@ POST https://app.detrack.com/api/v2/dn/jobs
 2. Request Headers
 ------------------
 Content-Type: application/json
-X-API-KEY: 7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4
+X-API-KEY: process.env.DETRACK_API_KEY
 Accept: application/json
 
 3. Request Payload

@@ -2,6 +2,7 @@ import type {
   User, 
   Store, 
   Order, 
+  DatabaseOrder,
   TagFilter, 
   SavedProduct, 
   TitleFilter, 
@@ -43,12 +44,6 @@ export interface UserSession {
   session_token: string
   expires_at: string
   created_at: string
-}
-
-export interface SyncStatus {
-  last_sync: string | null
-  total_products: number
-  last_sync_status: string | null
 }
 
 export class DatabaseService {
@@ -179,7 +174,7 @@ export class DatabaseService {
   }
 
   // Order Management
-  async createOrder(order: Omit<Order, 'id' | 'created_at' | 'updated_at'>): Promise<Order> {
+  async createOrder(order: Omit<DatabaseOrder, 'id' | 'created_at' | 'updated_at'>): Promise<DatabaseOrder> {
     const id = generateUUID()
     const now = new Date().toISOString()
     
@@ -196,12 +191,12 @@ export class DatabaseService {
     }
   }
 
-  async getOrderById(id: string): Promise<Order | null> {
-    return this.db.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first<Order>()
+  async getOrderById(id: string): Promise<DatabaseOrder | null> {
+    return this.db.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first<DatabaseOrder>()
   }
 
-  async getOrderByShopifyId(storeId: string, shopifyOrderId: number): Promise<Order | null> {
-    return this.db.prepare('SELECT * FROM orders WHERE store_id = ? AND shopify_order_id = ?').bind(storeId, shopifyOrderId).first<Order>()
+  async getOrderByShopifyId(storeId: string, shopifyOrderId: number): Promise<DatabaseOrder | null> {
+    return this.db.prepare('SELECT * FROM orders WHERE store_id = ? AND shopify_order_id = ?').bind(storeId, shopifyOrderId).first<DatabaseOrder>()
   }
 
   async deleteOrder(id: string): Promise<void> {
@@ -249,7 +244,7 @@ export class DatabaseService {
     console.log(`DatabaseService.deleteAllOrders: Verification - ${remainingOrders} orders remaining`)
   }
 
-  async getOrdersByStore(storeId: string, limit = 200, offset = 0): Promise<Order[]> {
+  async getOrdersByStore(storeId: string, limit = 200, offset = 0): Promise<DatabaseOrder[]> {
     try {
       console.log(`Database: Getting orders for store ${storeId} with limit ${limit} and offset ${offset}`)
       
@@ -258,7 +253,7 @@ export class DatabaseService {
         WHERE store_id = ? 
         ORDER BY created_at DESC 
         LIMIT ? OFFSET ?
-      `).bind(storeId, limit, offset).all<Order>()
+      `).bind(storeId, limit, offset).all<DatabaseOrder>()
       
       console.log(`Database: Found ${result.results?.length || 0} orders for store ${storeId}`)
       return result.results || []
@@ -268,7 +263,7 @@ export class DatabaseService {
     }
   }
 
-  async getAllOrders(limit = 200, offset = 0): Promise<Order[]> {
+  async getAllOrders(limit = 200, offset = 0): Promise<DatabaseOrder[]> {
     try {
       console.log(`Database: Getting all orders with limit ${limit} and offset ${offset}`)
       
@@ -276,7 +271,7 @@ export class DatabaseService {
         SELECT * FROM orders 
         ORDER BY created_at DESC 
         LIMIT ? OFFSET ?
-      `).bind(limit, offset).all<Order>()
+      `).bind(limit, offset).all<DatabaseOrder>()
       
       console.log(`Database: Found ${result.results?.length || 0} total orders`)
       return result.results || []
@@ -286,7 +281,7 @@ export class DatabaseService {
     }
   }
 
-  async getOrdersByStatus(status: string, limit = 200, offset = 0): Promise<Order[]> {
+  async getOrdersByStatus(status: string, limit = 200, offset = 0): Promise<DatabaseOrder[]> {
     try {
       console.log(`Database: Getting orders with status ${status} with limit ${limit} and offset ${offset}`)
       
@@ -295,7 +290,7 @@ export class DatabaseService {
         WHERE status = ? 
         ORDER BY created_at DESC 
         LIMIT ? OFFSET ?
-      `).bind(status, limit, offset).all<Order>()
+      `).bind(status, limit, offset).all<DatabaseOrder>()
       
       console.log(`Database: Found ${result.results?.length || 0} orders with status ${status}`)
       return result.results || []
@@ -776,6 +771,35 @@ export class DatabaseService {
     `).bind(product.id, product.productId, product.title, product.variantTitle, product.price, product.handle, product.tags, product.orderTags, product.storeId, product.storeDomain, product.userId, product.createdAt).run()
   }
 
+  async saveProductUpsert(product: {
+    id: string
+    productId: string
+    title: string
+    variantTitle: string
+    price: string
+    handle: string
+    tags: string
+    orderTags: string
+    storeId: string
+    storeDomain: string
+    userId: string
+    createdAt: string
+  }): Promise<void> {
+    // Use INSERT OR REPLACE to handle duplicates
+    await this.db.prepare(`
+      INSERT OR REPLACE INTO saved_products (id, product_id, title, variant_title, price, handle, tags, order_tags, store_id, store_domain, user_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(product.id, product.productId, product.title, product.variantTitle, product.price, product.handle, product.tags, product.orderTags, product.storeId, product.storeDomain, product.userId, product.createdAt).run()
+  }
+
+  async updateProductLabel(productId: string, userId: string, label: string): Promise<void> {
+    await this.db.prepare(`
+      UPDATE saved_products 
+      SET label = ? 
+      WHERE id = ? AND user_id = ?
+    `).bind(label, productId, userId).run()
+  }
+
   async deleteSavedProduct(productId: string, userId: string): Promise<void> {
     await this.db.prepare(`
       DELETE FROM saved_products 
@@ -902,8 +926,8 @@ export class DatabaseService {
           );
         }
       } catch (err) {
-        console.error(`[saveAllProducts] Error processing product id=${product.id}:`, err && err.message);
-        if (err && err.stack) console.error('[saveAllProducts] Stack:', err.stack);
+        console.error(`[saveAllProducts] Error processing product id=${product.id}:`, err instanceof Error ? err.message : String(err));
+        if (err instanceof Error && err.stack) console.error('[saveAllProducts] Stack:', err.stack);
       }
     }
     // Batch execute in chunks of 50

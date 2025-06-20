@@ -60,10 +60,10 @@ function NavigationTabs() {
 function AppRoutes({ viewMode, setViewMode }: { viewMode: any, setViewMode: any }) {
   return (
     <Routes>
-      <Route path="/dashboard" element={<Dashboard viewMode={viewMode} onViewModeChange={setViewMode} />} />
+      <Route path="/dashboard" element={<Dashboard viewMode={viewMode} />} />
       <Route path="/settings" element={<Settings viewMode={viewMode} onViewModeChange={setViewMode} />} />
       <Route path="/analytics" element={<Analytics viewMode={viewMode} onViewModeChange={setViewMode} />} />
-      <Route path="/info" element={<Info viewMode={viewMode} onViewModeChange={setViewMode} />} />
+      <Route path="/info" element={<Info viewMode={viewMode} />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )

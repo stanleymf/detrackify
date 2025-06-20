@@ -345,6 +345,10 @@ async function handleApiRoutes(
 		return handleBulkSaveProducts(request, db, authResult.user!.id);
 	}
 
+	if (path === '/api/saved-products/bulk-label' && request.method === 'POST') {
+		return handleBulkApplyLabel(request, db, authResult.user!.id);
+	}
+
 	return new Response('Not Found', { status: 404 })
 }
 
@@ -2954,7 +2958,8 @@ async function handleGetSavedProducts(request: Request, db: DatabaseService, use
 			orderTags: p.order_tags ? p.order_tags.split(', ') : [],
 			storeId: p.store_id,
 			storeDomain: p.store_domain,
-			createdAt: p.created_at
+			createdAt: p.created_at,
+			label: p.label || null
 		}))
 		
 		return new Response(JSON.stringify({ savedProducts: mapped }), {
@@ -3408,30 +3413,95 @@ async function handleFetchStoreProductsByTag(request: Request, db: DatabaseServi
 async function handleBulkSaveProducts(request: Request, db: DatabaseService, userId: string): Promise<Response> {
 	try {
 		const { products } = await request.json();
+		console.log('[handleBulkSaveProducts] Received products to save:', products.length);
+		
 		if (!products || !Array.isArray(products) || products.length === 0) {
 			return new Response(JSON.stringify({ error: 'No products to save' }), { status: 400 });
 		}
-		// Save each product (upsert logic)
+		
+		let savedCount = 0;
+		let skippedCount = 0;
+		
+		// Save each product using upsert logic
 		for (const product of products) {
-			const savedProductId = globalThis.crypto.randomUUID();
-			await db.saveProduct({
-				id: savedProductId,
-				productId: product.id,
-				title: product.title,
-				variantTitle: product.variantTitle || '',
-				price: product.price || '0',
-				handle: product.handle,
-				tags: Array.isArray(product.tags) ? product.tags.join(', ') : product.tags,
-				orderTags: '',
-				storeId: product.storeId,
-				storeDomain: product.storeDomain,
-				userId,
-				createdAt: new Date().toISOString(),
-			});
+			try {
+				const savedProductId = globalThis.crypto.randomUUID();
+				console.log(`[handleBulkSaveProducts] Saving product: ${product.title} (${product.id})`);
+				
+				// Use INSERT OR REPLACE to handle duplicates
+				await db.saveProductUpsert({
+					id: savedProductId,
+					productId: product.id,
+					title: product.title,
+					variantTitle: product.variantTitle || '',
+					price: product.price || '0',
+					handle: product.handle,
+					tags: Array.isArray(product.tags) ? product.tags.join(', ') : product.tags,
+					orderTags: '',
+					storeId: product.storeId,
+					storeDomain: product.storeDomain,
+					userId,
+					createdAt: new Date().toISOString(),
+				});
+				savedCount++;
+			} catch (error) {
+				console.error(`[handleBulkSaveProducts] Error saving product ${product.id}:`, error);
+				// Continue with other products even if one fails
+			}
 		}
-		return new Response(JSON.stringify({ success: true }), { status: 200 });
+		
+		console.log(`[handleBulkSaveProducts] Completed: ${savedCount} saved, ${skippedCount} skipped`);
+		return new Response(JSON.stringify({ 
+			success: true, 
+			savedCount,
+			skippedCount,
+			totalProcessed: products.length
+		}), { status: 200 });
 	} catch (error) {
 		console.error('[handleBulkSaveProducts] Error:', error);
 		return new Response(JSON.stringify({ error: 'Failed to save products' }), { status: 500 });
 	}
+}async function handleBulkApplyLabel(request: Request, db: DatabaseService, userId: string): Promise<Response> {
+	try {
+		const { productIds, label, storeId } = await request.json();
+		console.log('[handleBulkApplyLabel] Received productIds to label:', productIds.length, 'label:', label);
+		
+		if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+			return new Response(JSON.stringify({ error: 'No products to label' }), { status: 400 });
+		}
+		
+		if (!label || !label.trim()) {
+			return new Response(JSON.stringify({ error: 'Label is required' }), { status: 400 });
+		}
+		
+		let updatedCount = 0;
+		let skippedCount = 0;
+		
+		// Update each product's label
+		for (const productId of productIds) {
+			try {
+				console.log(`[handleBulkApplyLabel] Updating label for product: ${productId}`);
+				
+				// Update the product's label in the database
+				await db.updateProductLabel(productId, userId, label.trim());
+				updatedCount++;
+			} catch (error) {
+				console.error(`[handleBulkApplyLabel] Error updating product ${productId}:`, error);
+				// Continue with other products even if one fails
+				skippedCount++;
+			}
+		}
+		
+		console.log(`[handleBulkApplyLabel] Completed: ${updatedCount} updated, ${skippedCount} skipped`);
+		return new Response(JSON.stringify({ 
+			success: true, 
+			updatedCount,
+			skippedCount,
+			totalProcessed: productIds.length
+		}), { status: 200 });
+	} catch (error) {
+		console.error('[handleBulkApplyLabel] Error:', error);
+		return new Response(JSON.stringify({ error: 'Failed to apply label' }), { status: 500 });
+	}
 }
+

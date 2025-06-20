@@ -1,5 +1,5 @@
 // Test different GET request parameters for Detrack API
-const API_KEY = '7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4'
+const API_KEY = process.env.DETRACK_API_KEY
 
 async function testDetrackGetParams() {
   console.log('Testing different GET request parameters...\n')
@@ -36,7 +36,7 @@ async function testDetrackGetParams() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-KEY': API_KEY,
+          'X-API-KEY': process.env.DETRACK_API_KEY,
           'Accept': 'application/json'
         }
       })

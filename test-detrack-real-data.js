@@ -1,5 +1,5 @@
 // Test Detrack API with real order data from dashboard
-const API_KEY = '7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4'
+const API_KEY = process.env.DETRACK_API_KEY
 
 async function testDetrackWithRealData() {
   console.log('Testing Detrack API with real order data...\n')
@@ -126,7 +126,7 @@ async function testDetrackWithRealData() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-KEY': API_KEY,
+        'X-API-KEY': process.env.DETRACK_API_KEY,
         'Accept': 'application/json'
       },
       body: JSON.stringify(detrackPayload)

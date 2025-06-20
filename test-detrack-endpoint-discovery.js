@@ -1,5 +1,5 @@
 // Test both Detrack endpoints (cloud and connect) for GET and POST
-const API_KEY = '7d5c8ef661165fb1e7cd33edb47b6ef8caa97b54a990cdf4'
+const API_KEY = process.env.DETRACK_API_KEY
 
 const endpoints = [
   {
@@ -48,7 +48,7 @@ async function testEndpoints() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-KEY': API_KEY,
+          'X-API-KEY': process.env.DETRACK_API_KEY,
           'Accept': 'application/json'
         }
       })
@@ -64,7 +64,7 @@ async function testEndpoints() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-KEY': API_KEY,
+          'X-API-KEY': process.env.DETRACK_API_KEY,
           'Accept': 'application/json'
         },
         body: JSON.stringify(testPayload)

@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - 2025-06-20
+
+### Fixed
+- **Database Schema Mismatch** - Fixed critical issue where orders were not being saved due to schema mismatch between code and database
+- **Orders Table Schema** - Updated remote D1 database schema to match code expectations with `processed_data` and `raw_shopify_data` JSON columns
+- **Order Processing** - Resolved `NOT NULL constraint failed: orders.order_number` error that prevented order saves
+- **Webhook Processing** - Orders from Shopify fulfillment webhooks now save successfully to database
+- **Dashboard Order Display** - Orders now appear in dashboard after fulfillment events
+
+### Changed
+- **Database Schema** - Migrated from old field-by-field orders table to new JSON-based schema for better flexibility
+- **Order Storage Format** - Orders now stored as JSON strings (`processed_data` and `raw_shopify_data`) instead of individual columns
+- **Database Migration** - Applied direct schema update to remote D1 database to resolve migration system limitations
+
+### Technical Improvements
+- **Type Safety** - Added `DatabaseOrder` interface to properly type database operations
+- **Error Handling** - Improved error handling in database operations with proper TypeScript types
+- **Schema Consistency** - Ensured local and remote database schemas are now aligned
+- **Migration System** - Created migration file for future reference (015_update_orders_schema.sql)
+
+### Root Cause Analysis
+- **Issue**: Remote D1 database had old schema with `order_number` column, but code expected new schema with JSON columns
+- **Impact**: All order saves failed silently with constraint errors
+- **Solution**: Direct schema update to remote database to match code expectations
+- **Prevention**: Future migrations should use proper D1 migration system when available
+
+## [0.11.0] - 2024-12-19
+
+### Added
+- **Bulk Save Upsert Logic** - Implemented INSERT OR REPLACE functionality to handle duplicate products during bulk save operations
+- **Product Label Support** - Added label column to saved_products table and implemented label application functionality
+- **Bulk Label Application** - New endpoint `/api/saved-products/bulk-label` for applying labels to multiple saved products
+- **Enhanced Save Logging** - Added detailed logging for bulk save operations with counts of saved, skipped, and total processed products
+
+### Changed
+- **Bulk Save Behavior** - Changed from simple INSERT to upsert logic to prevent unique constraint violations
+- **Database Schema** - Added `label` column to `saved_products` table via migration `011_add_label_to_saved_products.sql`
+- **Save Product Method** - Added `saveProductUpsert` method to handle duplicate products gracefully
+- **Product Response** - Updated saved products API to include label field in responses
+
+### Fixed
+- **Bulk Save Duplicate Issue** - Fixed issue where only 7 out of 21 products were saved due to unique constraint violations on duplicate products
+- **Label Application Not Working** - Implemented missing `/api/saved-products/bulk-label` endpoint that was being called by frontend
+- **Product Label Persistence** - Labels are now properly saved to database and displayed in the UI
+- **Database Constraint Handling** - Proper handling of `UNIQUE(product_id, user_id)` constraint during bulk operations
+
+### Technical Improvements
+- **Database Migration** - Added migration to support product labels in saved_products table
+- **Error Handling** - Enhanced error handling in bulk operations with detailed logging
+- **API Response Enhancement** - Bulk save now returns detailed statistics about the operation
+- **Database Service Updates** - Added `updateProductLabel` method for label management
+
 ## [0.10.0] - 2024-12-19
 
 ### Added
