@@ -191,6 +191,10 @@ async function handleApiRoutes(
 		return handleGetOrders(request, db)
 	}
 
+	if (path === '/api/orders/manual' && request.method === 'POST') {
+		return handleCreateManualOrder(request, db)
+	}
+
 	if (path === '/api/orders/clear-all' && request.method === 'DELETE') {
 		return handleClearAllOrders(db)
 	}
@@ -1179,6 +1183,115 @@ async function handleUpdateOrder(orderId: string, request: Request, db: Database
 		console.error(`[handleUpdateOrder] Error updating order ${orderId}:`, error)
 		return new Response(JSON.stringify({ error: 'Failed to update order' }), { status: 500 })
 	}
+}
+
+async function handleCreateManualOrder(request: Request, db: DatabaseService): Promise<Response> {
+	try {
+		const orderData = await request.json()
+		
+		// Process manual order with minimal transformations
+		const processedData = processManualOrder(orderData)
+		
+		// Generate a unique manual order ID
+		const manualOrderId = generateManualOrderId()
+		const orderName = orderData.deliveryOrderNo || `MANUAL-${manualOrderId}`
+		
+		// Create order directly in database
+		await db.createOrder({
+			store_id: 'manual', // Special store ID for manual orders
+			shopify_order_id: manualOrderId,
+			shopify_order_name: orderName,
+			status: 'Ready for Export',
+			processed_data: JSON.stringify([processedData]), // Single line item
+			raw_shopify_data: JSON.stringify(orderData), // Store original input
+			manually_edited_fields: null,
+			exported_at: null
+		})
+		
+		return new Response(JSON.stringify({ 
+			success: true, 
+			message: 'Manual order created successfully',
+			orderId: manualOrderId
+		}), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	} catch (error) {
+		console.error('[handleCreateManualOrder] Error creating manual order:', error)
+		return new Response(JSON.stringify({ 
+			error: 'Failed to create manual order',
+			details: error instanceof Error ? error.message : String(error)
+		}), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+}
+
+// Helper function to process manual order data with minimal transformations
+function processManualOrder(userInput: any): any {
+	// Helper function to normalize phone numbers (reuse existing logic)
+	const normalizePhoneNumber = (phone: string, format: string): string => {
+		if (!phone) return ''
+		
+		// Remove all spaces and special characters first
+		let cleaned = phone.replace(/[\s\-\(\)\.]/g, '')
+		
+		// Handle Singapore numbers (+65)
+		if (cleaned.startsWith('+65')) {
+			// Remove +65 and return clean number
+			return cleaned.substring(3)
+		}
+		
+		// Handle other international numbers (just remove +)
+		if (cleaned.startsWith('+')) {
+			return cleaned.substring(1)
+		}
+		
+		// Return as is for local numbers
+		return cleaned
+	}
+	
+	return {
+		// Direct mapping from user input to dashboard fields
+		deliveryOrderNo: userInput.deliveryOrderNo || '',
+		deliveryDate: userInput.deliveryDate || '',
+		processingDate: userInput.processingDate || '',
+		jobReleaseTime: userInput.jobReleaseTime || '',
+		deliveryCompletionTimeWindow: userInput.deliveryCompletionTimeWindow || '',
+		trackingNo: '', // Manual orders don't have tracking numbers initially
+		senderNumberOnApp: normalizePhoneNumber(userInput.senderNumberOnApp, 'normalize'),
+		deliverySequence: '', // Not provided in manual form
+		address: userInput.address || '',
+		companyName: userInput.companyName || '',
+		postalCode: '', // Not provided in manual form
+		firstName: userInput.firstName || '',
+		lastName: userInput.lastName || '',
+		recipientPhoneNo: normalizePhoneNumber(userInput.recipientPhoneNo, 'normalize'),
+		senderPhoneNo: normalizePhoneNumber(userInput.senderPhoneNo, 'normalize'),
+		instructions: userInput.instructions || '',
+		assignTo: '', // Not provided in manual form
+		emailsForNotifications: userInput.emailsForNotifications || '',
+		zone: '', // Not provided in manual form
+		accountNo: '', // Not provided in manual form
+		deliveryJobOwner: '', // Not provided in manual form
+		senderNameOnApp: userInput.senderNameOnApp || '',
+		group: userInput.group || '',
+		noOfShippingLabels: userInput.noOfShippingLabels || '',
+		attachmentUrl: '', // Not provided in manual form
+		podAt: '', // Not provided in manual form
+		remarks: '', // Not provided in manual form
+		itemCount: userInput.itemCount || '',
+		serviceTime: '', // Not provided in manual form
+		sku: '', // Not provided in manual form
+		description: userInput.description || '',
+		qty: userInput.qty || ''
+	}
+}
+
+// Helper function to generate unique manual order ID
+function generateManualOrderId(): number {
+	return Math.floor(Math.random() * 1000000) + 1000000 // 7-digit number
 }
 
 async function handleReprocessOrders(request: Request, db: DatabaseService): Promise<Response> {

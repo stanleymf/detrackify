@@ -61,7 +61,8 @@ Detrackify is a web application that bridges Shopify e-commerce platforms with D
 │      ├── Dashboard.tsx                                      │
 │      ├── Analytics.tsx                                      │
 │      ├── Settings.tsx                                       │
-│      └── Info.tsx                                           │
+│      ├── Info.tsx                                           │
+│      └── AddOrder.tsx (Modal)                               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -179,6 +180,7 @@ DELETE /api/stores/:id
 
 Order Management:
 GET    /api/orders
+POST   /api/orders/manual
 POST   /api/fetch-orders
 POST   /api/reprocess-orders
 DELETE /api/orders/:id
@@ -214,6 +216,23 @@ POST   /api/update-webhook-secrets
 5. Extract Processing Rules Applied
    ↓
 6. Transformed Data Stored in Database
+   ↓
+7. Available for Export to Detrack
+```
+
+#### Manual Order Creation Flow
+```
+1. User Clicks "Add Order" on Dashboard
+   ↓
+2. AddOrder.tsx Modal Opens
+   ↓
+3. User Fills and Submits Form
+   ↓
+4. POST Request to /api/orders/manual
+   ↓
+5. Minimal Processing in Worker (e.g., phone normalization)
+   ↓
+6. Order Inserted into D1 with `store_id: 'manual'`
    ↓
 7. Available for Export to Detrack
 ```

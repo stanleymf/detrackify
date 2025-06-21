@@ -17,10 +17,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Eye, Calendar, Clock, RefreshCw, Menu, X } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Eye, Calendar, Clock, RefreshCw, Menu, X, Plus } from "lucide-react"
 import { type Order, DASHBOARD_FIELD_LABELS, type DashboardColumnConfig } from "@/types"
 import { storage } from "@/lib/storage"
 import { useIsMobile } from "@/components/hooks/use-mobile"
+import { AddOrder } from "@/components/AddOrder"
 
 export function Dashboard({ 
   viewMode = 'auto', 
@@ -47,6 +55,7 @@ export function Dashboard({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [productLabels, setProductLabels] = useState<any[]>([])
   const [savedProducts, setSavedProducts] = useState<any[]>([])
+  const [addOrderModalOpen, setAddOrderModalOpen] = useState(false)
 
   const isMobile = useIsMobile()
   const actualViewMode = viewMode === 'auto' ? (isMobile ? 'mobile' : 'desktop') : viewMode
@@ -915,6 +924,28 @@ export function Dashboard({
         >
           Clear All Orders
         </Button>
+        
+        <Dialog open={addOrderModalOpen} onOpenChange={setAddOrderModalOpen}>
+          <DialogTrigger asChild>
+            <Button className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white">
+              <Plus className="h-4 w-4" />
+              Add Order
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add New Order</DialogTitle>
+            </DialogHeader>
+            <AddOrder 
+              viewMode={actualViewMode} 
+              onViewModeChange={onViewModeChange}
+              onOrderCreated={() => {
+                setAddOrderModalOpen(false)
+                loadOrdersFromDatabase(1, pageSize) // Refresh orders after creation
+              }}
+            />
+          </DialogContent>
+        </Dialog>
         
         {/* Tag Filter Input */}
         <div className="flex items-center gap-2">
