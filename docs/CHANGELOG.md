@@ -8,6 +8,17 @@
 ### Updated
 - **Documentation**: Updated `EXTRACT_PROCESSING_REQUIREMENTS.md` and `FIELD_MAPPING_GUIDE.md` with new time window conversions
 - **Order Processor**: Enhanced time window conversion logic in `src/lib/orderProcessor.ts`
+- **Deployment**: Fixed Cloudflare deployment caching issues with clean build process
+
+### Fixed
+- **Deployment Issues**: Resolved Cloudflare worker deployment caching problems by implementing clean build process
+- **Extract Processing**: Fixed time window conversion functions not being called by extract methods
+- **Debug Logging**: Added comprehensive debug logging to verify time window processing
+
+### Tested
+- **Time Window Mapping**: Successfully tested with 15 orders containing "11:00-15:00" time windows
+- **Conversion Logic**: Verified both Job Release Time (→ "08:45") and Delivery Completion Time Window (→ "Morning") conversions
+- **Production Deployment**: Confirmed new code is live and processing orders correctly
 
 ## [0.14.0] - 2025-06-21
 

@@ -22,12 +22,10 @@ export class OrderProcessor {
       const value = this.extractFromTags(processingType, format)
       
       // Apply specific conversions for time-based fields
-      if (mapping.dashboardField === 'jobReleaseTime' && value) {
-        const convertedValue = this.convertTimeWindowToJobReleaseTime(value)
-        return convertedValue
-      } else if (mapping.dashboardField === 'deliveryCompletionTimeWindow' && value) {
-        const convertedValue = this.convertTimeWindowToDeliveryTimeWindow(value)
-        return convertedValue
+      if (mapping.dashboardField === 'jobReleaseTime') {
+        return this.convertTimeWindowToJobReleaseTime(value)
+      } else if (mapping.dashboardField === 'deliveryCompletionTimeWindow') {
+        return this.convertTimeWindowToDeliveryTimeWindow(value)
       }
       
       return value
@@ -208,10 +206,11 @@ export class OrderProcessor {
         }
       }
       
-      // Check for HH:MM-HH:MM format
+      // Check for HH:MM-HH:MM format and apply conversion
       const timeMatch = tag.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/)
       if (timeMatch) {
-        return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`
+        const timeWindow = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}-${timeMatch[3].padStart(2, '0')}:${timeMatch[4]}`
+        return this.convertTimeWindowToJobReleaseTime(timeWindow)
       }
       
       // Check for single time HH:MM format
@@ -251,10 +250,11 @@ export class OrderProcessor {
         }
       }
       
-      // Check for HH:MM-HH:MM format
+      // Check for HH:MM-HH:MM format and apply conversion
       const timeMatch = tag.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/)
       if (timeMatch) {
-        return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}-${timeMatch[3].padStart(2, '0')}:${timeMatch[4]}`
+        const timeWindow = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}-${timeMatch[3].padStart(2, '0')}:${timeMatch[4]}`
+        return this.convertTimeWindowToDeliveryTimeWindow(timeWindow)
       }
     }
     
