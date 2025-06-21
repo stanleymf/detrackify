@@ -38,18 +38,15 @@ async function fetchDetrackJobs(type: string, date: string) {
 
 // PartTimePay component with enhanced UI
 function PartTimePay({ jobs }: { jobs: any[] }) {
-  // Read driver info from server API
   const [driverInfos, setDriverInfos] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [selectedTimeWindow, setSelectedTimeWindow] = React.useState<'Morning' | 'Afternoon' | 'Night' | 'Total'>('Total');
 
   React.useEffect(() => {
     const loadDriverInfo = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const response = await fetch('/api/config/driver-info', {
-          credentials: 'include'
-        });
+        const response = await fetch('/api/config/driver-info', { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
           setDriverInfos(data.driverInfo || []);
@@ -64,28 +61,21 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
         setLoading(false);
       }
     };
-    
     loadDriverInfo();
   }, []);
 
-  // Filter jobs by selected time window
   const filteredJobs = React.useMemo(() => {
-    if (selectedTimeWindow === 'Total') {
-      return jobs;
-    }
+    if (selectedTimeWindow === 'Total') return jobs;
     return jobs.filter(job => job.time_window === selectedTimeWindow);
   }, [jobs, selectedTimeWindow]);
 
-  // Map driver name to jobs and calculate totals
   const driverPayData = React.useMemo(() => {
     if (!driverInfos.length) return [];
     return driverInfos.map(driver => {
-      // Match jobs where assigned_to matches driverName (case-insensitive)
       const matchedJobs = filteredJobs.filter(job => 
         job.assign_to && 
         job.assign_to.trim().toLowerCase() === driver.driverName.trim().toLowerCase()
       );
-      // Unique order IDs
       const uniqueOrderIds = Array.from(new Set(matchedJobs.map(job => job.do_number)));
       const totalCount = uniqueOrderIds.length;
       const pricePerDrop = parseFloat(driver.pricePerDrop) || 0;
@@ -100,125 +90,122 @@ function PartTimePay({ jobs }: { jobs: any[] }) {
     }).filter(d => d.totalCount > 0);
   }, [filteredJobs, driverInfos]);
 
-  if (loading) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Users className="mx-auto h-12 w-12 mb-4 opacity-50 animate-pulse" />
-        <p className="text-sm">Loading driver information...</p>
-      </div>
-    );
-  }
-
-  if (!driverPayData.length) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Users className="mx-auto h-12 w-12 mb-4 opacity-50" />
-        <p className="text-sm">No part-time pay data for {selectedTimeWindow === 'Total' ? 'this day' : selectedTimeWindow.toLowerCase()}.</p>
-        <p className="text-xs mt-1">Add driver information in the Info tab to see pay calculations.</p>
-      </div>
-    );
-  }
+  const TimeWindowToggle = (
+    <div className="flex flex-wrap gap-2">
+      {(['Morning', 'Afternoon', 'Night', 'Total'] as const).map((timeWindow) => (
+        <Button
+          key={timeWindow}
+          variant={selectedTimeWindow === timeWindow ? "default" : "outline"}
+          size="sm"
+          onClick={() => setSelectedTimeWindow(timeWindow)}
+          className="flex items-center gap-2"
+        >
+          {timeWindow === 'Morning' && <Clock className="w-4 h-4 text-orange-500" />}
+          {timeWindow === 'Afternoon' && <Clock className="w-4 h-4 text-blue-500" />}
+          {timeWindow === 'Night' && <Clock className="w-4 h-4 text-purple-500" />}
+          {timeWindow === 'Total' && <BarChart3 className="w-4 h-4 text-green-500" />}
+          {timeWindow}
+        </Button>
+      ))}
+    </div>
+  );
 
   const totalAmount = driverPayData.reduce((sum, d) => sum + d.totalAmount, 0);
   const totalOrders = driverPayData.reduce((sum, d) => sum + d.totalCount, 0);
 
   return (
     <div className="space-y-4">
-      {/* Time Window Toggle */}
-      <div className="flex flex-wrap gap-2">
-        {(['Morning', 'Afternoon', 'Night', 'Total'] as const).map((timeWindow) => (
-          <Button
-            key={timeWindow}
-            variant={selectedTimeWindow === timeWindow ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSelectedTimeWindow(timeWindow)}
-            className="flex items-center gap-2"
-          >
-            {timeWindow === 'Morning' && <Clock className="w-4 h-4 text-orange-500" />}
-            {timeWindow === 'Afternoon' && <Clock className="w-4 h-4 text-blue-500" />}
-            {timeWindow === 'Night' && <Clock className="w-4 h-4 text-purple-500" />}
-            {timeWindow === 'Total' && <BarChart3 className="w-4 h-4 text-green-500" />}
-            {timeWindow}
-          </Button>
-        ))}
-      </div>
+      {TimeWindowToggle}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-700">
-                  {selectedTimeWindow === 'Total' ? 'Total Orders' : `${selectedTimeWindow} Orders`}
-                </p>
-                <p className="text-2xl font-bold text-blue-900">{totalOrders}</p>
-              </div>
-              <BarChart3 className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-r from-green-50 to-green-100 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-700">
-                  {selectedTimeWindow === 'Total' ? 'Total Amount' : `${selectedTimeWindow} Amount`}
-                </p>
-                <p className="text-2xl font-bold text-green-900">${totalAmount.toFixed(2)}</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-700">
-                  {selectedTimeWindow === 'Total' ? 'Active Drivers' : `${selectedTimeWindow} Drivers`}
-                </p>
-                <p className="text-2xl font-bold text-purple-900">{driverPayData.length}</p>
-              </div>
-              <Users className="h-8 w-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Users className="mx-auto h-12 w-12 mb-4 opacity-50 animate-pulse" />
+          <p className="text-sm">Loading driver information...</p>
+        </div>
+      ) : driverPayData.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Users className="mx-auto h-12 w-12 mb-4 opacity-50" />
+          <p className="text-sm">No part-time pay data for {selectedTimeWindow === 'Total' ? 'this day' : selectedTimeWindow.toLowerCase()}.</p>
+          <p className="text-xs mt-1">Add driver information in the Info tab to see pay calculations.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-700">
+                      {selectedTimeWindow === 'Total' ? 'Total Orders' : `${selectedTimeWindow} Orders`}
+                    </p>
+                    <p className="text-2xl font-bold text-blue-900">{totalOrders}</p>
+                  </div>
+                  <BarChart3 className="h-8 w-8 text-blue-600" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-r from-green-50 to-green-100 border-green-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-700">
+                      {selectedTimeWindow === 'Total' ? 'Total Amount' : `${selectedTimeWindow} Amount`}
+                    </p>
+                    <p className="text-2xl font-bold text-green-900">${totalAmount.toFixed(2)}</p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-green-600" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-purple-700">
+                      {selectedTimeWindow === 'Total' ? 'Active Drivers' : `${selectedTimeWindow} Drivers`}
+                    </p>
+                    <p className="text-2xl font-bold text-purple-900">{driverPayData.length}</p>
+                  </div>
+                  <Users className="h-8 w-8 text-purple-600" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* Detailed Table */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm border rounded-lg overflow-hidden">
-          <thead>
-            <tr className="bg-gray-50 border-b">
-              <th className="px-4 py-3 text-left font-medium text-gray-700">Driver Name</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-700">Paynow Number</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-700">
-                {selectedTimeWindow === 'Total' ? 'Orders' : `${selectedTimeWindow} Orders`}
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-700">Price Per Drop</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-700">
-                {selectedTimeWindow === 'Total' ? 'Total Amount' : `${selectedTimeWindow} Amount`}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {driverPayData.map((d, idx) => (
-              <tr key={idx} className="border-b hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-medium text-gray-900">{d.driverName}</td>
-                <td className="px-4 py-3 text-gray-600 font-mono">{d.paynowNumber}</td>
-                <td className="px-4 py-3 text-center">
-                  <Badge variant="secondary" className="font-medium">{d.totalCount}</Badge>
-                </td>
-                <td className="px-4 py-3 text-right text-gray-600">${d.pricePerDrop.toFixed(2)}</td>
-                <td className="px-4 py-3 text-right font-bold text-green-600">${d.totalAmount.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm border rounded-lg overflow-hidden">
+              <thead>
+                <tr className="bg-gray-50 border-b">
+                  <th className="px-4 py-3 text-left font-medium text-gray-700">Driver Name</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-700">Paynow Number</th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-700">
+                    {selectedTimeWindow === 'Total' ? 'Orders' : `${selectedTimeWindow} Orders`}
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-700">Price Per Drop</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-700">
+                    {selectedTimeWindow === 'Total' ? 'Total Amount' : `${selectedTimeWindow} Amount`}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {driverPayData.map((d, idx) => (
+                  <tr key={idx} className="border-b hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900">{d.driverName}</td>
+                    <td className="px-4 py-3 text-gray-600 font-mono">{d.paynowNumber}</td>
+                    <td className="px-4 py-3 text-center">
+                      <Badge variant="secondary" className="font-medium">{d.totalCount}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-600">${d.pricePerDrop.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-bold text-green-600">${d.totalAmount.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -31,6 +31,7 @@ export interface ShopifyOrder {
   tracking_number: string
   tracking_company: string
   tracking_url: string
+  note_attributes?: ShopifyNoteAttribute[]
 }
 
 export interface ShopifyCustomer {
@@ -40,6 +41,14 @@ export interface ShopifyCustomer {
   email: string
   phone: string
   default_address: ShopifyAddress
+  price: string
+  variant_id: number
+  product_id: number
+  current_quantity?: number
+  fulfillable_quantity?: number
+  fulfillment_status?: string | null
+  properties?: ShopifyProperty[]
+  _properties?: ShopifyProperty[]
 }
 
 export interface ShopifyAddress {
@@ -67,6 +76,8 @@ export interface ShopifyLineItem {
   current_quantity?: number
   fulfillable_quantity?: number
   fulfillment_status?: string | null
+  properties?: ShopifyProperty[]
+  _properties?: ShopifyProperty[]
 }
 
 export interface ShopifyFulfillment {
@@ -177,4 +188,14 @@ export interface ShopifyProductImage {
   src: string
   variant_ids: number[]
   admin_graphql_api_id: string
+}
+
+export interface ShopifyNoteAttribute {
+  name: string
+  value: string
+}
+
+export interface ShopifyProperty {
+  name: string
+  value: any
 } 

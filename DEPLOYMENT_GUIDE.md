@@ -105,7 +105,7 @@ pnpm deploy
 
 ### 4.2 Webhook Configuration
 Set up these webhook endpoints in your Shopify app:
-- **URL**: `https://your-worker.your-subdomain.workers.dev/api/webhooks/shopify`
+- **URL**: `https://detrackify.dand3.com/api/webhooks/shopify`
 - **Topics**:
   - `orders/create`
   - `orders/updated`
@@ -321,13 +321,13 @@ If you prefer to register the webhook manually:
 5. **Configure the webhook:**
    - **Event**: `orders/fulfilled`
    - **Format**: `JSON`
-   - **URL**: `https://detrackify.stanleytan92.workers.dev/api/webhooks/shopify`
+   - **URL**: `https://detrackify.dand3.com/api/webhooks/shopify`
 6. **Click "Save webhook"**
 
 ### Webhook Configuration Details
 
 #### **Webhook Endpoint**
-- **URL**: `https://detrackify.stanleytan92.workers.dev/api/webhooks/shopify`
+- **URL**: `https://detrackify.dand3.com/api/webhooks/shopify`
 - **Method**: `POST`
 - **Format**: `JSON`
 

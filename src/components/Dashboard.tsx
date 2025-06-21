@@ -38,7 +38,8 @@ export function Dashboard({
   const [editValue, setEditValue] = useState('')
   const [selectedDate, setSelectedDate] = useState<string>('all')
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>('all')
-  const [orderTagFilter, setOrderTagFilter] = useState<string>('')
+  const [orderTagFilter, setOrderTagFilter] = useState('')
+  const [orderFilterMode, setOrderFilterMode] = useState<'OR' | 'AND'>('OR')
   const [columnConfigs, setColumnConfigs] = useState<DashboardColumnConfig[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(200)
@@ -186,14 +187,51 @@ export function Dashboard({
     setEditValue(currentValue)
   }
 
-  const handleCellSave = () => {
+  const handleCellSave = async () => {
     if (!editingCell) return
 
-    // TODO: Update order in database instead of localStorage
-    // For now, just refresh from database
-    loadOrdersFromDatabase()
-    setEditingCell(null)
-    setEditValue("")
+    try {
+      // Extract the base order ID from the line item ID
+      const baseOrderId = getBaseOrderId(editingCell.orderId)
+      
+      // Call the API to update the order
+      const response = await fetch(`/api/orders/${baseOrderId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          field: editingCell.field,
+          value: editValue,
+          lineItemIndex: editingCell.orderId.includes('-') ? parseInt(editingCell.orderId.split('-').pop() || '0') : 0
+        }),
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      
+      if (result.success) {
+        // Update was successful, now reload orders from the database
+        // to ensure the UI is in sync with the authoritative state
+        await loadOrdersFromDatabase(currentPage)
+        
+        // Show success feedback (optional)
+        console.log('Cell updated successfully, and orders reloaded.')
+      } else {
+        throw new Error('Update failed')
+      }
+    } catch (error) {
+      console.error('Error updating cell:', error)
+      alert(`Failed to save changes: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setEditingCell(null)
+      setEditValue("")
+    }
   }
 
   const handleCellCancel = () => {
@@ -201,9 +239,9 @@ export function Dashboard({
     setEditValue("")
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      handleCellSave()
+      await handleCellSave()
     } else if (e.key === "Escape") {
       handleCellCancel()
     }
@@ -245,7 +283,6 @@ export function Dashboard({
       }
 
       const result = await response.json()
-      console.log('Export result:', result)
 
       if (result.success) {
         // Show success message with summary
@@ -442,26 +479,12 @@ export function Dashboard({
     .filter(product => product.label && product.label.toLowerCase() === 'stands')
     .map(product => product.title.toLowerCase())
 
-  console.log('=== FLOWER STANDS DEBUG ===')
-  console.log('Saved Products loaded:', savedProducts)
-  console.log('Total saved products:', savedProducts.length)
-  console.log('Stands Product Names:', standProductNames)
-  console.log('Stands product count:', standProductNames.length)
-  console.log('Filtered Orders count:', filteredOrders.length)
-  console.log('Sample order descriptions:', filteredOrders.slice(0, 3).map(o => o.description))
-
   // Filter orders for Flower Stands
   const flowerStandOrders = filteredOrders.filter(order => {
     const description = (order.description || '').toLowerCase()
     const matches = standProductNames.some(productName => description.includes(productName))
-    if (matches) {
-      console.log('Flower Stand match found:', { orderId: order.id, description, matchingProduct: standProductNames.find(name => description.includes(name)) })
-    }
     return matches
   })
-
-  console.log('Flower Stand Orders found:', flowerStandOrders.length)
-  console.log('=== END FLOWER STANDS DEBUG ===')
 
   // Group flower stand orders by unique order (to avoid duplicates from line items)
   const uniqueFlowerStandOrders = new Map<string, { deliveryOrderNo: string; fullLineItem: string; address: string }>()
@@ -480,40 +503,46 @@ export function Dashboard({
 
   // Load orders from database
   const loadOrdersFromDatabase = async (page = currentPage, size = pageSize) => {
+    setLoadingOrders(true)
     try {
-      setLoadingOrders(true)
+      const response = await fetch(`/api/orders?limit=${size}&offset=${(page - 1) * size}`, {
+        credentials: 'include'
+      })
+      if (!response.ok) {
+        throw new Error('Failed to load orders from database')
+      }
+      const data = await response.json()
       
-      const offset = (page - 1) * size
-      const response = await fetch(`/api/orders?limit=${size}&offset=${offset}`, { credentials: 'include' })
-      
-      if (response.ok) {
-        const data = await response.json()
+      // Log the raw data received from the backend for debugging
+      console.log("Raw orders received from backend:", data.orders)
+
+      const transformedOrders = (data.orders || []).map((order: any) => {
+        // Debug: Log the processed_data field specifically
+        console.log(`Order ${order.id} processed_data:`, order.processed_data)
+        console.log(`Order ${order.id} processed_data type:`, typeof order.processed_data)
         
-        // Handle both array response (current) and object response (legacy)
-        let ordersArray: Order[]
-        let totalCount: number
-        
-        if (Array.isArray(data)) {
-          // Current format: direct array of orders
-          ordersArray = data
-          totalCount = data.length // For now, assume this is the total. We'll need to get actual total count
-        } else if (data && typeof data === 'object' && 'orders' in data) {
-          // Legacy format: object with orders and totalCount
-          ordersArray = data.orders || []
-          totalCount = data.totalCount || 0
-        } else {
-          console.error('Unexpected response format:', data)
-          ordersArray = []
-          totalCount = 0
+        // Parse processed_data if it's a string
+        let processedData = order.processed_data
+        if (typeof processedData === 'string') {
+          try {
+            processedData = JSON.parse(processedData)
+            console.log(`Order ${order.id} parsed processed_data:`, processedData)
+          } catch (e) {
+            console.error(`Failed to parse processed_data for order ${order.id}:`, e)
+            processedData = {}
+          }
         }
         
-        setOrders(ordersArray)
-        setTotalOrderCount(totalCount)
-        setCurrentPage(page)
-      } else {
-        const errorText = await response.text()
-        console.error('Failed to load orders from database:', errorText)
-      }
+        return {
+          ...order,
+          ...(processedData || {}),
+        }
+      });
+
+      console.log("Transformed orders for frontend:", transformedOrders);
+
+      setOrders(transformedOrders)
+      setTotalOrderCount(data.totalCount || 0)
     } catch (error) {
       console.error('Error loading orders:', error)
     } finally {
@@ -537,7 +566,7 @@ export function Dashboard({
         .map(tag => tag.trim())
         .filter(tag => tag.length > 0)
       
-      const requestBody = tags.length > 0 ? { tags } : {}
+      const requestBody = tags.length > 0 ? { tags, filterMode: orderFilterMode } : {}
       
       const response = await fetch('/api/fetch-orders', { 
         method: 'POST', 
@@ -895,6 +924,15 @@ export function Dashboard({
             onChange={(e) => setOrderTagFilter(e.target.value)}
             className="w-64"
           />
+          <Select value={orderFilterMode} onValueChange={(value: 'OR' | 'AND') => setOrderFilterMode(value)}>
+            <SelectTrigger className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="OR">OR</SelectItem>
+              <SelectItem value="AND">AND</SelectItem>
+            </SelectContent>
+          </Select>
           <Button 
             onClick={handleFetchOrders} 
             disabled={fetchingOrders} 

@@ -28,16 +28,17 @@ export function Login({ onLogin }: LoginProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Login handler called', loginData)
     setIsLoading(true)
-
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(loginData),
+        body: JSON.stringify({
+          email: loginData.email,
+          password: loginData.password,
+        }),
         credentials: 'include'
       })
 
@@ -69,7 +70,6 @@ export function Login({ onLogin }: LoginProps) {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Register handler called', registerData)
     setIsLoading(true)
 
     if (registerData.password !== registerData.confirmPassword) {

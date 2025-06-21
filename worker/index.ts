@@ -1,5 +1,3 @@
-console.log('=== Detrackify Worker Version: 20240619-UNIQUE ===');
-console.log('🚨 THIS IS THE LATEST VERSION - IF YOU SEE THIS, NEW CODE IS RUNNING 🚨');
 import { DatabaseService } from '../src/lib/database'
 import { CloudflareAuthService, requireAuth, getSessionTokenFromRequest, setSessionCookie, clearSessionCookie } from '../src/lib/auth'
 import { processShopifyOrder } from '../src/lib/orderProcessor'
@@ -46,7 +44,6 @@ function generateUUID(): string {
 // Helper function to fetch complete order data from Shopify API
 async function fetchCompleteOrderData(accessToken: string, shopDomain: string, orderId: string): Promise<any> {
 	try {
-		console.log(`Fetching order ${orderId} from ${shopDomain}...`)
 		const response = await fetch(`https://${shopDomain}/admin/api/2024-01/orders/${orderId}.json`, {
 			headers: {
 				'X-Shopify-Access-Token': accessToken,
@@ -67,7 +64,6 @@ async function fetchCompleteOrderData(accessToken: string, shopDomain: string, o
 		}
 		
 		const data = await response.json()
-		console.log(`Successfully fetched order ${orderId} from Shopify API`)
 		return data.order
 	} catch (error) {
 		console.error('Error fetching order from Shopify API:', error)
@@ -204,6 +200,11 @@ async function handleApiRoutes(
 		return handleDeleteOrder(orderId, db)
 	}
 
+	if (path.startsWith('/api/orders/') && request.method === 'PUT') {
+		const orderId = path.split('/')[3]
+		return handleUpdateOrder(orderId, request, db)
+	}
+
 	if (path === '/api/detrack/job-types' && request.method === 'GET') {
 		return await handleGetDetrackJobTypes(db)
 	}
@@ -305,14 +306,10 @@ async function handleApiRoutes(
 	}
 
 	if (path === '/api/stores/products2' && request.method === 'POST') {
-		console.log('[ROUTE] === TEST ROUTE PRODUCTS2 CALLED ===');
-		console.log('🚨 TEST ROUTE WORKING - NEW CODE IS DEPLOYED 🚨');
 		return new Response(JSON.stringify({ test: true, version: '20240619-UNIQUE', message: 'NEW CODE IS RUNNING' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 	}
 
 	if (path === '/api/stores/products' && request.method === 'POST') {
-		console.log('[ROUTE] === NEW ROUTE HANDLER CALLED ===');
-		console.log('[ROUTE] Calling handleFetchStoreProductsByTag');
 		return handleFetchStoreProductsByTag(request, db, authResult.user!.id);
 	}
 
@@ -442,16 +439,10 @@ async function handleAuthCheck(request: Request, authService: CloudflareAuthServ
 
 // Shopify webhook handler
 async function handleShopifyWebhook(request: Request, env: Env, db: DatabaseService): Promise<Response> {
-	console.log('=== WEBHOOK HANDLER VERSION 3.0 START ===')
-	console.log('This is the NEWEST version of the webhook handler')
-	console.log('Using global field mappings directly (no per-store logic)')
-	
 	try {
 		const shopDomain = request.headers.get('x-shopify-shop-domain')
 		const topic = request.headers.get('x-shopify-topic')
 		const hmacHeader = request.headers.get('x-shopify-hmac-sha256')
-		
-		console.log('Webhook received:', { shopDomain, topic, hmacHeader: hmacHeader ? 'present' : 'missing' })
 		
 		if (!shopDomain || !topic || !hmacHeader) {
 			console.error('Missing required headers:', { shopDomain, topic, hmacHeader: !!hmacHeader })
@@ -465,7 +456,10 @@ async function handleShopifyWebhook(request: Request, env: Env, db: DatabaseServ
 			return new Response('Store not found', { status: 404 })
 		}
 
-		console.log('Store found:', { storeId: store.id, storeName: store.store_name, hasWebhookSecret: !!store.webhook_secret })
+		const [globalMappings, extractMappings] = await Promise.all([
+			db.getGlobalFieldMappings(),
+			db.getExtractProcessingMappings()
+		])
 
 		// Verify webhook signature
 		const body = await request.text()
@@ -474,63 +468,14 @@ async function handleShopifyWebhook(request: Request, env: Env, db: DatabaseServ
 		let webhookSecret: string | null = null
 		let secretSource = 'none'
 		
-		console.log('Webhook secret debugging:', {
-			storeApiSecret: store.api_secret,
-			storeApiSecretType: typeof store.api_secret,
-			storeApiSecretLength: store.api_secret?.length || 0,
-			storeApiSecretTruthy: !!store.api_secret
-		})
-		
 		// Use store's API secret (for private app approach)
 		if (store.api_secret && store.api_secret.trim().length > 0) {
 			webhookSecret = store.api_secret
 			secretSource = 'store'
 		}
 		
-		console.log('Webhook secret resolution:', {
-			webhookSecret: webhookSecret ? 'present' : 'missing',
-			webhookSecretLength: webhookSecret?.length || 0,
-			secretSource
-		})
-		
 		// TEMPORARILY DISABLED: Webhook signature validation for private app testing
 		// TODO: Implement proper polling for private apps instead of webhooks
-		console.log('Webhook signature validation temporarily disabled for private app testing')
-		
-		/*
-		if (!webhookSecret) {
-			console.error('No webhook secret available for signature validation')
-			console.error('Please set the API secret in the store configuration or as SHOPIFY_API_SECRET environment variable')
-			return new Response(JSON.stringify({ error: 'Webhook secret not configured' }), { status: 401 })
-		}
-		
-		// Verify HMAC signature
-		const hmacHeader = request.headers.get('x-shopify-hmac-sha256')
-		if (!hmacHeader) {
-			console.error('Missing HMAC header')
-			return new Response(JSON.stringify({ error: 'Missing HMAC header' }), { status: 401 })
-		}
-		
-		const calculatedHmac = crypto.createHmac('sha256', webhookSecret).update(body, 'utf8').digest('hex')
-		const receivedHmac = hmacHeader
-		
-		console.log('Signature validation:', {
-			calculatedHmac: calculatedHmac.substring(0, 10) + '...',
-			receivedHmac: receivedHmac.substring(0, 10) + '...',
-			match: calculatedHmac === receivedHmac,
-			secretSource,
-			secretLength: webhookSecret.length
-		})
-		
-		if (calculatedHmac !== receivedHmac) {
-			console.error('Invalid webhook signature')
-			console.error('Expected:', calculatedHmac)
-			console.error('Received:', receivedHmac)
-			console.error('Webhook secret length:', webhookSecret.length)
-			console.error('Secret source:', secretSource)
-			return new Response(JSON.stringify({ error: 'Invalid webhook signature' }), { status: 401 })
-		}
-		*/
 
 		// Parse Shopify order data
 		let orderData: any
@@ -631,80 +576,31 @@ async function handleShopifyWebhook(request: Request, env: Env, db: DatabaseServ
 		try {
 			// Check if order already exists
 			const existingOrder = await db.getOrderByShopifyId(store.id, parseInt(orderId))
+			
+			// Always re-process the order to get the latest data
+			const processedDataArray = processShopifyOrder(completeOrderData, globalMappings, extractMappings)
+
 			if (existingOrder) {
-				console.log('Order already exists:', orderName)
-				// Update the existing order with fresh data instead of skipping
-				console.log('Updating existing order with fresh data...')
-				
-				// Get field mappings - use global mappings directly
-				console.log('=== WEBHOOK HANDLER DEBUG ===')
-				console.log('About to call db.getGlobalFieldMappings() WITHOUT any parameters')
-				console.log('This should load global mappings (store_id IS NULL)')
-				const globalMappings = await db.getGlobalFieldMappings()
-				console.log('=== WEBHOOK HANDLER DEBUG ===')
-				console.log('Called db.getGlobalFieldMappings() WITHOUT parameters')
-				console.log('Result length:', globalMappings.length)
-				console.log('First few mappings:', globalMappings.slice(0, 3))
-				console.log('About to call db.getExtractProcessingMappings() WITHOUT any parameters')
-				const extractMappings = await db.getExtractProcessingMappings()
-				console.log('Called db.getExtractProcessingMappings() WITHOUT parameters')
-				console.log('Result length:', extractMappings.length)
-				console.log('=== END WEBHOOK HANDLER DEBUG ===')
-				
-				// Log the raw line_items array BEFORE processing
-				console.log('=== RAW LINE_ITEMS ARRAY START ===');
-				console.log('Raw line_items array:', JSON.stringify(completeOrderData.line_items, null, 2));
-				console.log('=== RAW LINE_ITEMS ARRAY END ===');
-				
-				// Process the order using global mappings with complete data
-				const processedDataArray = processShopifyOrder(completeOrderData, globalMappings, extractMappings)
-				
-				// Update existing order with fresh data
+				console.log('Order already exists, updating with fresh data:', orderName)
 				await db.updateOrder(existingOrder.id, {
-					shopify_order_name: orderName!,
 					processed_data: JSON.stringify(processedDataArray),
 					raw_shopify_data: JSON.stringify(completeOrderData),
+					manually_edited_fields: null, // Reset manual edits on update
 					updated_at: new Date().toISOString()
 				})
-				
-				await db.markWebhookEventProcessed(webhookEventId)
-				console.log('Order updated successfully:', orderName)
-				return new Response('OK', { status: 200 })
+			} else {
+				console.log('Creating new order:', orderName)
+				await db.createOrder({
+					store_id: store.id,
+					shopify_order_id: parseInt(orderId),
+					shopify_order_name: orderName!,
+					status: 'Ready for Export' as const,
+					processed_data: JSON.stringify(processedDataArray),
+					raw_shopify_data: JSON.stringify(completeOrderData),
+					manually_edited_fields: null,
+					exported_at: null
+				})
 			}
-			
-			// Get field mappings - use global mappings directly
-			console.log('=== WEBHOOK HANDLER DEBUG ===')
-			console.log('About to call db.getGlobalFieldMappings() WITHOUT any parameters')
-			console.log('This should load global mappings (store_id IS NULL)')
-			const globalMappings = await db.getGlobalFieldMappings()
-			console.log('=== WEBHOOK HANDLER DEBUG ===')
-			console.log('Called db.getGlobalFieldMappings() WITHOUT parameters')
-			console.log('Result length:', globalMappings.length)
-			console.log('First few mappings:', globalMappings.slice(0, 3))
-			console.log('About to call db.getExtractProcessingMappings() WITHOUT any parameters')
-			const extractMappings = await db.getExtractProcessingMappings()
-			console.log('Called db.getExtractProcessingMappings() WITHOUT parameters')
-			console.log('Result length:', extractMappings.length)
-			console.log('=== END WEBHOOK HANDLER DEBUG ===')
-			
-			// Log the raw line_items array BEFORE processing
-			console.log('=== RAW LINE_ITEMS ARRAY START ===');
-			console.log('Raw line_items array:', JSON.stringify(completeOrderData.line_items, null, 2));
-			console.log('=== RAW LINE_ITEMS ARRAY END ===');
-			
-			// Process the order using global mappings with complete data
-			const processedDataArray = processShopifyOrder(completeOrderData, globalMappings, extractMappings)
-			
-			// Save order to database with expanded line-item data
-			await db.createOrder({
-				store_id: store.id,
-				shopify_order_id: parseInt(orderId),
-				shopify_order_name: orderName!,
-				status: 'Ready for Export' as const,
-				processed_data: JSON.stringify(processedDataArray),
-				raw_shopify_data: JSON.stringify(completeOrderData),
-				exported_at: null
-			})
 
 			await db.markWebhookEventProcessed(webhookEventId)
 			console.log('Order processed successfully:', orderName)
@@ -815,55 +711,35 @@ async function handleDeleteStore(storeId: string, db: DatabaseService): Promise<
 async function handleGetOrders(request: Request, db: DatabaseService): Promise<Response> {
 	try {
 		const url = new URL(request.url)
-		const storeId = url.searchParams.get('storeId')
-		const status = url.searchParams.get('status')
-		const limit = parseInt(url.searchParams.get('limit') || '200')
-		const offset = parseInt(url.searchParams.get('offset') || '0')
+		const limit = parseInt(url.searchParams.get('limit') || '100', 10)
+		const offset = parseInt(url.searchParams.get('offset') || '0', 10)
 
-		console.log('handleGetOrders called with:', { storeId, status, limit, offset })
+		// Get total order count
+		const totalCount = await db.getTotalOrderCount()
 
-		let orders
-		if (storeId) {
-				orders = await db.getOrdersByStore(storeId, limit, offset)
-				console.log(`Found ${orders.length} orders for store ${storeId}`)
-		} else if (status) {
-			orders = await db.getOrdersByStatus(status, limit, offset)
-			console.log(`Found ${orders.length} orders with status ${status}`)
-		} else {
-			// Get all orders instead of just 'Ready for Export'
-			orders = await db.getAllOrders(limit, offset)
-			console.log(`Found ${orders.length} total orders`)
-		}
+		// Get paginated orders
+		const orders = await db.getAllOrders(limit, offset)
 
-		console.log('Raw orders from database:', orders.map(o => ({ id: o.id, name: o.shopify_order_name, status: o.status })))
-
-		// Transform database orders to frontend format
+		// The frontend expects a specific format where each DB row (which represents a processed Shopify order)
+		// is transformed. The processed_data field contains a JSON string of an array of line items.
+		// We need to parse this and create a flat list of line-item-based orders for the frontend.
 		const transformedOrders: any[] = []
 		
 		orders.forEach(dbOrder => {
-			console.log(`Processing order ${dbOrder.shopify_order_name}:`)
-			console.log(`  - processed_data type: ${typeof dbOrder.processed_data}`)
-			console.log(`  - processed_data length: ${dbOrder.processed_data?.length || 0}`)
-			console.log(`  - processed_data preview: ${dbOrder.processed_data?.substring(0, 200) || 'null/undefined'}`)
-			
 			try {
 				const processedDataArray = JSON.parse(dbOrder.processed_data)
-				console.log(`Successfully parsed processed data for order ${dbOrder.shopify_order_name}:`, processedDataArray)
 				
-				// Check if processedDataArray is an array (new format) or object (old format)
 				if (Array.isArray(processedDataArray)) {
-					// New format: array of line-item data
 					processedDataArray.forEach((processedData, index) => {
 						transformedOrders.push({
-							id: `${dbOrder.id}-${index}`, // Unique ID for each line item
+							id: `${dbOrder.id}-${index}`,
 							...processedData,
 							status: dbOrder.status,
 							created_at: dbOrder.created_at,
 							updated_at: dbOrder.updated_at
 						})
 					})
-				} else {
-					// Old format: single object
+				} else if (processedDataArray) { // Handle case where it might be a single object
 					transformedOrders.push({
 						id: dbOrder.id,
 						...processedDataArray,
@@ -874,57 +750,21 @@ async function handleGetOrders(request: Request, db: DatabaseService): Promise<R
 				}
 			} catch (error) {
 				console.error('Error parsing processed data for order:', dbOrder.id, error)
-				console.error('Raw processed_data:', dbOrder.processed_data)
-				// Return a minimal order object if parsing fails
-				transformedOrders.push({
-					id: dbOrder.id,
-					deliveryOrderNo: dbOrder.shopify_order_name,
-					status: dbOrder.status,
-					// Add default values for required fields
-					deliveryDate: '',
-					processingDate: '',
-					jobReleaseTime: '',
-					deliveryCompletionTimeWindow: '',
-					trackingNo: '',
-					senderNumberOnApp: '',
-					deliverySequence: '',
-					address: '',
-					companyName: '',
-					postalCode: '',
-					firstName: '',
-					lastName: '',
-					recipientPhoneNo: '',
-					senderPhoneNo: '',
-					instructions: '',
-					assignTo: '',
-					emailsForNotifications: '',
-					zone: '',
-					accountNo: '',
-					deliveryJobOwner: '',
-					senderNameOnApp: '',
-					group: '',
-					noOfShippingLabels: '',
-					attachmentUrl: '',
-					podAt: '',
-					remarks: '',
-					itemCount: '',
-					serviceTime: '',
-					sku: '',
-					description: '',
-					qty: ''
-				})
 			}
 		})
 
-		console.log(`Returning ${transformedOrders.length} transformed orders`)
+		const response = {
+			orders: transformedOrders,
+			totalCount,
+		}
 
-		return new Response(JSON.stringify(transformedOrders), {
+		return new Response(JSON.stringify(response), {
 			status: 200,
 			headers: { 'Content-Type': 'application/json' }
 		})
 	} catch (error) {
 		console.error('Error in handleGetOrders:', error)
-		return new Response(JSON.stringify({ error: 'Failed to get orders' }), {
+		return new Response(JSON.stringify({ error: 'Failed to fetch orders' }), {
 			status: 500,
 			headers: { 'Content-Type': 'application/json' }
 		})
@@ -1107,7 +947,7 @@ async function handleSaveGlobalFieldMappings(request: Request, db: DatabaseServi
 	}
 }
 
-async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, extractMappings: any, tags?: string[]): Promise<{ storeId: string, storeName: string, fetched: number, saved: number, errors: string[] }> {
+async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, extractMappings: any, tags?: string[], filterMode: 'OR' | 'AND' = 'OR'): Promise<{ storeId: string, storeName: string, fetched: number, saved: number, errors: string[] }> {
 	const results = { storeId: store.id, storeName: store.store_name, fetched: 0, saved: 0, errors: [] as string[] }
 	try {
 		console.log(`Fetching orders from Shopify store: ${store.store_name} (${store.shopify_domain})`)
@@ -1117,9 +957,25 @@ async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, 
 		
 		// Add tag filtering if tags are provided
 		if (tags && tags.length > 0) {
-			const tagParam = tags.map(tag => encodeURIComponent(tag.trim())).join(',')
-			apiUrl += `&tag=${tagParam}`
-			console.log(`Adding tag filter to API call: ${tagParam}`)
+			if (filterMode === 'OR') {
+				// Shopify API supports multiple tag parameters for OR logic
+				// Each tag should be a separate &tag= parameter
+				tags.forEach(tag => {
+					const cleanTag = tag.trim()
+					if (cleanTag) {
+						apiUrl += `&tag=${encodeURIComponent(cleanTag)}`
+					}
+				})
+				console.log(`Adding OR tag filters to API call: ${tags.join(', ')}`)
+			} else {
+				// For AND logic, we'll fetch all orders and filter client-side
+				// Use the first tag for initial filtering to reduce data transfer
+				const firstTag = tags[0].trim()
+				if (firstTag) {
+					apiUrl += `&tag=${encodeURIComponent(firstTag)}`
+					console.log(`Adding initial tag filter for AND logic: ${firstTag}`)
+				}
+			}
 		}
 		
 		console.log(`Making API call to: ${apiUrl}`)
@@ -1141,40 +997,53 @@ async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, 
 		}
 		
 		const data = await response.json()
-		const shopifyOrders: any[] = data.orders || []
-		console.log(`Received ${shopifyOrders.length} orders from Shopify${tags && tags.length > 0 ? ` (filtered by tags: ${tags.join(', ')})` : ''}`)
+		let shopifyOrders: any[] = data.orders || []
+		
+		// Apply AND logic filtering if needed
+		if (filterMode === 'AND' && tags && tags.length > 1) {
+			const requiredTags = tags.map(tag => tag.trim().toLowerCase())
+			shopifyOrders = shopifyOrders.filter(order => {
+				const orderTags = (order.tags || '').split(',').map((tag: string) => tag.trim().toLowerCase())
+				// Check if order has ALL required tags
+				return requiredTags.every(requiredTag => 
+					orderTags.some(orderTag => orderTag.includes(requiredTag))
+				)
+			})
+			console.log(`AND filtering applied: ${data.orders?.length || 0} orders fetched, ${shopifyOrders.length} orders match ALL tags: ${tags.join(', ')}`)
+		}
+		
+		console.log(`Received ${shopifyOrders.length} orders from Shopify${tags && tags.length > 0 ? ` (filtered by tags: ${tags.join(', ')} with ${filterMode} logic)` : ''}`)
 		results.fetched = shopifyOrders.length
 		
 		for (const shopifyOrder of shopifyOrders) {
 			try {
 				console.log(`Processing order: ${shopifyOrder.name} (ID: ${shopifyOrder.id})`)
-				// Check if order already exists
+				
+				const processedDataArray = processShopifyOrder(shopifyOrder, globalMappings, extractMappings)
+				
 				const existingOrder = await db.getOrderByShopifyId(store.id, shopifyOrder.id)
 				if (existingOrder) {
-					console.log(`Order ${shopifyOrder.name} already exists, skipping`)
-					continue
+					console.log(`Order ${shopifyOrder.name} already exists, updating it.`)
+					await db.updateOrder(existingOrder.id, {
+						processed_data: JSON.stringify(processedDataArray),
+						raw_shopify_data: JSON.stringify(shopifyOrder),
+						manually_edited_fields: null, // Reset manual edits on update
+						updated_at: new Date().toISOString()
+					})
+				} else {
+					console.log(`Saving new order to database: ${shopifyOrder.name}`)
+					await db.createOrder({
+						store_id: store.id,
+						shopify_order_id: shopifyOrder.id,
+						shopify_order_name: shopifyOrder.name,
+						status: 'Ready for Export' as const,
+						processed_data: JSON.stringify(processedDataArray),
+						raw_shopify_data: JSON.stringify(shopifyOrder),
+						manually_edited_fields: null,
+						exported_at: null
+					})
+					results.saved++
 				}
-				
-				console.log(`Processing order ${shopifyOrder.name} with mappings:`, { globalMappings: globalMappings.length, extractMappings: extractMappings.length })
-				
-				// Process and save
-				const processedDataArray = processShopifyOrder(shopifyOrder, globalMappings, extractMappings)
-				console.log(`Processed data for order ${shopifyOrder.name}:`, processedDataArray)
-				
-				const orderToSave = {
-					store_id: store.id,
-					shopify_order_id: shopifyOrder.id,
-					shopify_order_name: shopifyOrder.name,
-					status: 'Ready for Export' as const,
-					processed_data: JSON.stringify(processedDataArray),
-					raw_shopify_data: JSON.stringify(shopifyOrder),
-					exported_at: null
-				}
-				
-				console.log(`Saving order to database:`, orderToSave)
-				await db.createOrder(orderToSave)
-				console.log(`Successfully saved order: ${shopifyOrder.name}`)
-				results.saved++
 			} catch (err: any) {
 				console.error(`Error processing order ${shopifyOrder.id}:`, err)
 				results.errors.push(`Order ${shopifyOrder.id}: ${err.message}`)
@@ -1194,11 +1063,16 @@ async function handleFetchOrders(request: Request, db: DatabaseService): Promise
 		
 		// Parse request body for optional tag filtering
 		let tags: string[] | undefined
+		let filterMode: 'OR' | 'AND' = 'OR'
 		try {
 			const requestBody = await request.json()
 			if (requestBody.tags && Array.isArray(requestBody.tags)) {
 				tags = requestBody.tags.filter((tag: string) => tag && tag.trim())
 				console.log(`Tag filtering requested: ${tags.join(', ')}`)
+			}
+			if (requestBody.filterMode && (requestBody.filterMode === 'OR' || requestBody.filterMode === 'AND')) {
+				filterMode = requestBody.filterMode
+				console.log(`Filter mode requested: ${filterMode}`)
 			}
 		} catch (e) {
 			// No request body or invalid JSON - continue without tags
@@ -1230,7 +1104,7 @@ async function handleFetchOrders(request: Request, db: DatabaseService): Promise
 		
 		for (const store of stores) {
 			console.log(`Processing store: ${store.store_name} (${store.shopify_domain})`)
-			const res = await fetchOrdersFromShopify(db, store, globalMappings, extractMappings, tags || [])
+			const res = await fetchOrdersFromShopify(db, store, globalMappings, extractMappings, tags || [], filterMode)
 			console.log(`Store ${store.store_name} result:`, res)
 			results.push(res)
 		}
@@ -1251,24 +1125,23 @@ async function handleFetchOrders(request: Request, db: DatabaseService): Promise
 
 async function handleDeleteOrder(orderId: string, db: DatabaseService): Promise<Response> {
 	try {
-		console.log(`[handleDeleteOrder] Attempting to delete order: ${orderId}`)
+		console.log(`[handleDeleteOrder] Deleting order ${orderId}...`)
 		
-		// First check if the order exists
+		// Check if order exists
 		const existingOrder = await db.getOrderById(orderId)
 		if (!existingOrder) {
-			console.log(`[handleDeleteOrder] Order not found: ${orderId}`)
+			console.log(`[handleDeleteOrder] Order ${orderId} not found`)
 			return new Response(JSON.stringify({ error: 'Order not found' }), {
 				status: 404,
 				headers: { 'Content-Type': 'application/json' }
 			})
 		}
 		
-		console.log(`[handleDeleteOrder] Found order to delete: ${orderId} (${existingOrder.shopify_order_name})`)
-		
+		// Delete the order
 		await db.deleteOrder(orderId)
-		console.log(`[handleDeleteOrder] Successfully deleted order: ${orderId}`)
+		console.log(`[handleDeleteOrder] Successfully deleted order ${orderId}`)
 		
-		return new Response(JSON.stringify({ success: true, deletedOrderId: orderId }), {
+		return new Response(JSON.stringify({ success: true, message: 'Order deleted successfully' }), {
 			status: 200,
 			headers: { 'Content-Type': 'application/json' }
 		})
@@ -1281,80 +1154,38 @@ async function handleDeleteOrder(orderId: string, db: DatabaseService): Promise<
 	}
 }
 
-async function handleReprocessOrders(request: Request, db: DatabaseService): Promise<Response> {
+async function handleUpdateOrder(orderId: string, request: Request, db: DatabaseService): Promise<Response> {
 	try {
-		console.log('Starting reprocess orders process...')
-		
-		// Get all existing orders from database
-		const existingOrders = await db.getAllOrders(1000, 0)
-		console.log(`Found ${existingOrders.length} existing orders to reprocess`)
-		
-		if (existingOrders.length === 0) {
-			console.log('No orders found in database to reprocess')
-			return new Response(JSON.stringify({ 
-				success: true, 
-				results: [],
-				message: 'No orders found in database to reprocess.'
-			}), {
-				status: 200,
-				headers: { 'Content-Type': 'application/json' }
-			})
+		const existingOrder = await db.getOrderById(orderId)
+		if (!existingOrder) {
+			return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404 })
 		}
 		
-		// Load global field mappings
-		const [globalMappings, extractMappings] = await Promise.all([
-			db.getGlobalFieldMappings(),
-			db.getExtractProcessingMappings()
-		])
-		console.log(`Loaded ${globalMappings.length} global mappings and ${extractMappings.length} extract mappings`)
+		const updateData = await request.json()
+		const processedData = JSON.parse(existingOrder.processed_data)
 		
-		let reprocessedCount = 0
-		const errors: string[] = []
-		
-		for (const dbOrder of existingOrders) {
-			try {
-				console.log(`Reprocessing order: ${dbOrder.shopify_order_name}`)
-				
-				// Parse the raw Shopify data
-				const rawShopifyData = JSON.parse(dbOrder.raw_shopify_data)
-				
-				// Reprocess the order with correct mappings
-				const processedDataArray = processShopifyOrder(rawShopifyData, globalMappings, extractMappings)
-				console.log(`Reprocessed data for order ${dbOrder.shopify_order_name}:`, processedDataArray)
-				
-				// Update the order in database with new processed data
-				await db.updateOrder(dbOrder.id, {
-					processed_data: JSON.stringify(processedDataArray),
-					updated_at: new Date().toISOString()
-				})
-				
-				console.log(`Successfully reprocessed order: ${dbOrder.shopify_order_name}`)
-				reprocessedCount++
-			} catch (err: any) {
-				console.error(`Error reprocessing order ${dbOrder.shopify_order_name}:`, err)
-				errors.push(`Order ${dbOrder.shopify_order_name}: ${err.message}`)
-			}
+		const lineItemIndex = updateData.lineItemIndex || 0
+		if (processedData[lineItemIndex] && updateData.field && updateData.value !== undefined) {
+			processedData[lineItemIndex][updateData.field] = updateData.value
 		}
 		
-		console.log('Reprocess orders completed. Results:', { reprocessedCount, errors })
-		return new Response(JSON.stringify({ 
-			success: true, 
-			results: [{
-				storeName: 'All Stores',
-				reprocessed: reprocessedCount,
-				errors
-			}]
-		}), {
-			status: 200,
-			headers: { 'Content-Type': 'application/json' }
+		await db.updateOrder(orderId, {
+			processed_data: JSON.stringify(processedData),
+			updated_at: new Date().toISOString()
 		})
-	} catch (error: any) {
-		console.error('Error in handleReprocessOrders:', error)
-		return new Response(JSON.stringify({ error: 'Failed to reprocess orders', details: error.message }), {
-			status: 500,
-			headers: { 'Content-Type': 'application/json' }
-		})
+		
+		return new Response(JSON.stringify({ success: true }), { status: 200 })
+	} catch (error) {
+		console.error(`[handleUpdateOrder] Error updating order ${orderId}:`, error)
+		return new Response(JSON.stringify({ error: 'Failed to update order' }), { status: 500 })
 	}
+}
+
+async function handleReprocessOrders(request: Request, db: DatabaseService): Promise<Response> {
+	return new Response(JSON.stringify({ success: true, message: "This feature is being reworked." }), {
+		status: 200,
+		headers: { 'Content-Type': 'application/json' }
+	})
 }
 
 async function handleClearAllOrders(db: DatabaseService): Promise<Response> {
@@ -1465,7 +1296,7 @@ async function handleRegisterShopifyWebhook(storeId: string, db: DatabaseService
 			return new Response(JSON.stringify({ error: 'Store not found' }), { status: 404 });
 		}
 
-		const webhookUrl = 'https://detrackify.stanleytan92.workers.dev/api/webhooks/shopify';
+		const webhookUrl = 'https://detrackify.dand3.com/api/webhooks/shopify';
 		const accessToken = store.access_token;
 		const shop = store.shopify_domain.replace(/^https?:\/\//, '');
 
@@ -1558,7 +1389,6 @@ async function handleRegisterShopifyWebhook(storeId: string, db: DatabaseService
 async function handleExportToDetrack(request: Request, db: DatabaseService): Promise<Response> {
 	try {
 		console.log('=== EXPORT TO DETRACK START ===')
-		console.log('Starting export to Detrack process...')
 		
 		const body = await request.json()
 		const { orderIds } = body
@@ -1570,17 +1400,13 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 			})
 		}
 		
-		console.log(`Exporting ${orderIds.length} orders to Detrack...`)
+		// Initialize tracking variables
+		const exportResults: any[] = []
+		let errorCount = 0
+		let successCount = 0
 		
 		// Get Detrack configuration from database
-		console.log('Getting Detrack configuration...')
 		const detrackConfig = await getDetrackConfig(db)
-		console.log('Detrack config:', {
-			hasConfig: !!detrackConfig,
-			isEnabled: detrackConfig?.isEnabled,
-			hasApiKey: !!detrackConfig?.apiKey,
-			baseUrl: detrackConfig?.baseUrl
-		})
 		
 		if (!detrackConfig) {
 			return new Response(JSON.stringify({ error: 'Detrack configuration not found' }), {
@@ -1605,16 +1431,13 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 		
 		// Get all orders from database to find the ones we need to export
 		const allOrders = await db.getAllOrders(1000, 0) // Get all orders
-		console.log(`Found ${allOrders.length} total orders in database`)
 
 		// Group line items by their base order ID
 		const orderGroups = new Map<string, { order: any, lineItems: any[], lineItemIds: string[] }>()
 		
 		for (const lineItemId of orderIds) {
 			try {
-				console.log(`\n--- Processing line item ${lineItemId} for grouping ---`)
 				const baseOrderId = lineItemId.split('-').slice(0, -1).join('-')
-				console.log(`Looking for base order ID: ${baseOrderId}`)
 				
 				const order = allOrders.find(o => o.id === baseOrderId)
 				if (!order) {
@@ -1627,7 +1450,6 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 				let processedData: any[]
 				try {
 					processedData = JSON.parse(order.processed_data)
-					console.log(`Processed data parsed successfully, ${processedData.length} items`)
 				} catch (parseError) {
 					console.error(`Failed to parse processed data for order ${baseOrderId}:`, parseError)
 					exportResults.push({ orderId: lineItemId, success: false, error: 'Invalid processed data format' })
@@ -1643,7 +1465,6 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 				}
 				
 				const lineItemIndex = parseInt(lineItemId.split('-').pop() || '0')
-				console.log(`Line item index: ${lineItemIndex}`)
 				
 				if (lineItemIndex >= processedData.length) {
 					console.error(`Line item index ${lineItemIndex} out of range (max: ${processedData.length - 1})`)
@@ -1653,12 +1474,6 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 				}
 				
 				const lineItemData = processedData[lineItemIndex]
-				console.log(`Line item data:`, {
-					deliveryOrderNo: lineItemData.deliveryOrderNo,
-					description: lineItemData.description,
-					address: lineItemData.address,
-					recipientPhoneNo: lineItemData.recipientPhoneNo
-				})
 				
 				// Add to order group
 				if (!orderGroups.has(baseOrderId)) {
@@ -1679,11 +1494,6 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 				errorCount++
 			}
 		}
-		
-		console.log(`\n--- Grouped ${orderGroups.size} orders for export ---`)
-		for (const [baseOrderId, group] of orderGroups) {
-			console.log(`Order ${baseOrderId}: ${group.lineItems.length} line items`)
-		}
 
 		const jobs = []
 		const orderIdMapping = new Map<string, string[]>() // Maps job index to line item IDs
@@ -1691,15 +1501,12 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 		// Process each order group
 		for (const [baseOrderId, group] of orderGroups) {
 			try {
-				console.log(`\n--- Converting order ${baseOrderId} with ${group.lineItems.length} line items to Detrack format ---`)
-				
 				// Convert all line items for this order into a single Detrack job
 				const payload = convertMultipleLineItemsToDetrackFormat(group.lineItems, group.order.shopify_order_name)
 				
 				if (payload && payload.data && payload.data[0]) {
 					jobs.push(payload.data[0])
 					orderIdMapping.set(jobs.length - 1, group.lineItemIds) // Map job index to line item IDs
-					console.log(`Successfully converted order ${baseOrderId} to Detrack job`)
 				} else {
 					console.error(`Failed to convert order ${baseOrderId} to Detrack format`)
 					group.lineItemIds.forEach(lineItemId => {
@@ -1724,10 +1531,8 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 		}
 
 		// Send all jobs in a single bulk request
-		console.log(`Sending ${jobs.length} jobs to Detrack bulk endpoint...`)
 		const bulkPayload = { data: jobs }
 		const detrackUrl = `${detrackConfig.baseUrl}/dn/jobs/bulk`
-		console.log(`Using Detrack URL: ${detrackUrl}`)
 		const response = await fetch(detrackUrl, {
 			method: 'POST',
 			headers: {
@@ -1737,9 +1542,7 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 			},
 			body: JSON.stringify(bulkPayload)
 		})
-		console.log('Detrack bulk API response status:', response.status)
 		const responseText = await response.text()
-		console.log('Detrack bulk API response:', responseText)
 		let detrackResult
 		try {
 			detrackResult = JSON.parse(responseText)
@@ -1786,7 +1589,7 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 			errorCount += orderIds.length
 		}
 
-		console.log(`\n=== EXPORT TO DETRACK COMPLETED ===`)
+		console.log(`=== EXPORT TO DETRACK COMPLETED ===`)
 		console.log(`Summary: Total: ${orderIds.length}, Success: ${successCount}, Errors: ${errorCount}`)
 
 		return new Response(JSON.stringify({
@@ -1917,8 +1720,6 @@ function convertToDetrackFormat(orderData: any, orderName: string): any {
 
 // New function to convert multiple line items into a single Detrack job
 function convertMultipleLineItemsToDetrackFormat(lineItems: any[], orderName: string): any {
-	console.log(`Converting ${lineItems.length} line items to single Detrack job for order: ${orderName}`)
-	
 	if (lineItems.length === 0) {
 		console.error('No line items provided')
 		return null
@@ -1972,8 +1773,6 @@ function convertMultipleLineItemsToDetrackFormat(lineItems: any[], orderName: st
 		"quantity": parseInt(item.qty || '1')
 	}))
 	
-	console.log(`Created ${items.length} items for Detrack job:`, items.map(item => item.description))
-	
 	// Create payload according to Detrack API v2 specification
 	const payload = {
 		"data": [
@@ -2000,7 +1799,6 @@ function convertMultipleLineItemsToDetrackFormat(lineItems: any[], orderName: st
 		]
 	}
 	
-	console.log('Converted multiple line items to Detrack format:', payload)
 	return payload
 }
 

@@ -215,7 +215,6 @@ export default function Info({
       // Show migration notice if there was data in localStorage
       if (hadProductLabels || hadDriverInfos) {
         setShowMigrationNotice(true);
-        console.log('Migrated from localStorage to server-side storage');
       }
     } catch (error) {
       console.error('Error clearing localStorage:', error);
@@ -965,7 +964,6 @@ export default function Info({
       const response = await fetch('/api/stores', { credentials: 'include' })
       if (response.ok) {
         const storesData = await response.json()
-        console.log('Fetched stores from backend:', storesData)
         setStores(storesData)
       }
     } catch (error) {
@@ -1020,20 +1018,14 @@ export default function Info({
 
   // Fetch products by tag
   const fetchProductsByTag = async () => {
-    console.log('[Frontend] fetchProductsByTag called');
-    console.log('[Frontend] Current state:', { selectedStore, tagFilter, titleFilter, fetching });
-    
     if (!selectedStore) {
-      console.log('[Frontend] No store selected, returning');
       return;
     }
     
     if (fetching) {
-      console.log('[Frontend] Already fetching, returning');
       return;
     }
     
-    console.log('[Frontend] Starting fetch process');
     setFetchedProducts([]);
     setSelectedFetched(new Set());
     setFetching(true);
@@ -1045,9 +1037,6 @@ export default function Info({
         titles: titleFilter.split(',').map(t => t.trim()).filter(Boolean)
       };
       
-      console.log('[Frontend] Fetching products with:', requestBody);
-      console.log('[Frontend] Making request to /api/stores/products');
-      
       const res = await fetch('/api/stores/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1055,14 +1044,9 @@ export default function Info({
         body: JSON.stringify(requestBody)
       });
       
-      console.log('[Frontend] Response received:', res.status, res.statusText);
-      console.log('[Frontend] Response headers:', Object.fromEntries(res.headers.entries()));
-      
       if (res.ok) {
         const data = await res.json();
-        console.log('[Frontend] Response data:', data);
         setFetchedProducts(data.products || []);
-        console.log('[Frontend] Set fetched products:', data.products?.length || 0);
       } else {
         const errorText = await res.text();
         console.error('[Frontend] Error response:', errorText);
@@ -1076,7 +1060,6 @@ export default function Info({
       });
       alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      console.log('[Frontend] Setting fetching to false');
       setFetching(false);
     }
   };

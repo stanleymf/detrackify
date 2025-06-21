@@ -1,361 +1,485 @@
 import type { ShopifyOrder, ShopifyLineItem } from '@/types/shopify'
-import type { ExtractProcessingField, GlobalFieldMapping } from '@/types'
+import type { GlobalFieldMapping } from '@/types'
 
 export class OrderProcessor {
   private order: ShopifyOrder
+  private extractMappings: any[]
 
-  constructor(order: ShopifyOrder) {
+  constructor(order: ShopifyOrder, extractMappings: any[]) {
     this.order = order
+    this.extractMappings = extractMappings
+  }
+
+  /**
+   * Generic function to extract a value from various sources based on mapping.
+   */
+  private extractValue(mapping: any): string {
+    const sourceField = mapping.sourceField || ''
+    const processingType = mapping.processingType || ''
+    const format = mapping.format || ''
+    
+    if (sourceField === 'order.tags') {
+      const value = this.extractFromTags(processingType, format)
+      
+      // Apply specific conversions for time-based fields
+      if (mapping.dashboardField === 'jobReleaseTime' && value) {
+        const convertedValue = this.convertTimeWindowToJobReleaseTime(value)
+        return convertedValue
+      } else if (mapping.dashboardField === 'deliveryCompletionTimeWindow' && value) {
+        const convertedValue = this.convertTimeWindowToDeliveryTimeWindow(value)
+        return convertedValue
+      }
+      
+      return value
+    } else if (sourceField === 'line_items') {
+      const value = this.processLineItems(format)
+      return value
+    } else if (sourceField === 'order.name') {
+      const value = this.extractGroup(format)
+      return value
+    } else {
+      // Handle nested object paths like billing_address.phone
+      const value = this.extractNestedValue(sourceField)
+      
+      // Apply phone normalization if needed
+      if (processingType === 'phone' && format === 'normalize') {
+        const normalized = this.normalizePhoneNumber(value, format)
+        return normalized
+      }
+      
+      return value
+    }
+  }
+
+  private extractFromTags(processingType: string, format: string): string {
+    const tags = (this.order.tags || '').split(',').map(t => t.trim())
+    
+    if (processingType === 'date') {
+      // Look for date patterns in tags
+      for (const tag of tags) {
+        if (format === 'dd/mm/yyyy') {
+          // Look for DD/MM/YYYY pattern
+          const dateMatch = tag.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+          if (dateMatch) {
+            return dateMatch[0]
+          }
+        }
+      }
+    } else if (processingType === 'time') {
+      // Look for time patterns in tags
+      for (const tag of tags) {
+        if (format === 'time_window') {
+          // Look for HH:MM-HH:MM pattern
+          const timeMatch = tag.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/)
+          if (timeMatch) {
+            return timeMatch[0]
+          }
+          // Look for single time HH:MM pattern
+          const singleTimeMatch = tag.match(/(\d{1,2}):(\d{2})/)
+          if (singleTimeMatch) {
+            return singleTimeMatch[0]
+          }
+        }
+      }
+    }
+    
+    return ''
+  }
+
+  private extractFromNoteAttributes(processingType: string, format: string): string {
+    if (!format || !(this.order as any).note_attributes) return ''
+    const regex = new RegExp(format)
+    for (const attr of (this.order as any).note_attributes) {
+      if (attr.name.match(regex)) return attr.value
+      if (String(attr.value).match(regex)) return String(attr.value)
+    }
+    return ''
+  }
+
+  private extractFromLineItemProperties(processingType: string, format: string): string {
+    if (!format || !this.order.line_items) return ''
+    const regex = new RegExp(format)
+    for (const item of this.order.line_items) {
+      const properties = (item as any).properties || (item as any)._properties
+      if (!properties) continue
+      for (const prop of properties) {
+        if (prop.name.match(regex)) return prop.value
+        if (String(prop.value).match(regex)) return String(prop.value)
+      }
+    }
+    return ''
+  }
+
+  private getNestedValue(obj: any, path: string): any {
+    return path.split('.').reduce((current, key) => {
+      return current && current[key] !== undefined ? current[key] : undefined
+    }, obj)
+  }
+
+  /**
+   * Process Shopify order and extract all required fields based on mappings.
+   */
+  processShopifyOrder(): Record<string, string> {
+    const processedFields: Record<string, string> = {}
+    
+    this.extractMappings.forEach(mapping => {
+      // Check if this field should be skipped (noMapping equivalent)
+      if (mapping.processingType === 'skip' || mapping.noMapping) {
+        processedFields[mapping.dashboardField] = ''
+        return
+      }
+      
+      const value = this.extractValue(mapping)
+      processedFields[mapping.dashboardField] = value
+    })
+
+    // Apply defaults for fields not processed by extract mappings
+    if (!processedFields.description) {
+      processedFields.description = this.generateDescription()
+    }
+    if (!processedFields.qty) {
+      processedFields.qty = this.calculateItemCount()
+    }
+    if (!processedFields.address) {
+      processedFields.address = this.formatAddress()
+    }
+    if (!processedFields.deliveryOrderNo) {
+      processedFields.deliveryOrderNo = this.order.name || ''
+    }
+    if (!processedFields.emailsForNotifications) {
+      processedFields.emailsForNotifications = this.order.email || ''
+    }
+    if (!processedFields.instructions) {
+      processedFields.instructions = this.order.note || ''
+    }
+
+    return processedFields
   }
 
   /**
    * Extract date from order tags in dd/mm/yyyy format
    * Expected format in tags: "14:00-18:00, 18/06/2025, Delivery, Singapore"
-   * Look for date patterns like "dd/mm/yyyy" or "dd-mm-yyyy"
+   * Look for date patterns like "dd/mm/yyyy" or "dd-mm-yyyy" or "yyyy-mm-dd"
    */
-  extractDateFromTags(dateType: 'delivery' | 'processing'): string {
+  private extractDateFromTags(dateType: 'delivery' | 'processing'): string {
     const tags = this.order.tags || ''
-    
-    console.log(`Extracting ${dateType} date from tags: "${tags}"`)
-    
-    // Split tags and look for date patterns
     const tagParts = tags.split(',').map(tag => tag.trim())
-    console.log(`Tag parts:`, tagParts)
-    
-    // Look for date patterns in the tags
-    const datePatterns = [
-      /(\d{2}\/\d{2}\/\d{4})/, // dd/mm/yyyy
-      /(\d{2}-\d{2}-\d{4})/,   // dd-mm-yyyy
-      /(\d{1,2}\/\d{1,2}\/\d{4})/, // d/m/yyyy or dd/m/yyyy or d/mm/yyyy
-      /(\d{1,2}-\d{1,2}-\d{4})/    // d-m-yyyy or dd-m-yyyy or d-mm-yyyy
-    ]
-    
     for (const tag of tagParts) {
-      for (const pattern of datePatterns) {
-        const match = tag.match(pattern)
-        if (match) {
-          const dateValue = match[1]
-          console.log(`Found date in tag "${tag}": "${dateValue}"`)
-          
-          // Validate and format the date
-          if (this.isValidDateFormat(dateValue)) {
-            console.log(`Date is already in correct format: ${dateValue}`)
-            return dateValue // Already in dd/mm/yyyy format
-          }
-
-          // Try to parse and reformat if it's in a different format
-          const parsedDate = this.parseAndFormatDate(dateValue)
-          console.log(`Parsed date: "${parsedDate}"`)
-          return parsedDate
-        }
+      if (tag.toLowerCase().includes(dateType)) {
+        let dateMatch = tag.match(/(\d{4})-(\d{2})-(\d{2})/)
+        if (dateMatch) return `${dateMatch[3]}/${dateMatch[2]}/${dateMatch[1]}`
+        dateMatch = tag.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+        if (dateMatch) return `${dateMatch[1]}/${dateMatch[2]}/${dateMatch[3]}`
+        dateMatch = tag.match(/(\d{2})-(\d{2})-(\d{4})/)
+        if (dateMatch) return `${dateMatch[1]}/${dateMatch[2]}/${dateMatch[3]}`
+        const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/
+        dateMatch = tag.match(dateRegex)
+        if (dateMatch) return `${dateMatch[1].padStart(2, '0')}/${dateMatch[2].padStart(2, '0')}/${dateMatch[3]}`
       }
     }
-    
-    console.log(`No ${dateType} date found in tags`)
     return ''
   }
 
   /**
    * Extract time window from order tags and convert to job release time
    * Expected format in tags: "14:00-18:00, 18/06/2025, Delivery, Singapore"
-   * Look for time patterns like "hh:mm-hh:mm"
+   * Look for time patterns like "hh:mm-hh:mm" or time window keywords
    */
   extractJobReleaseTime(): string {
     const tags = this.order.tags || ''
     
-    console.log(`Extracting job release time from tags: "${tags}"`)
-    
-    // Split tags and look for time window patterns
     const tagParts = tags.split(',').map(tag => tag.trim())
     
-    // Look for time window patterns like "14:00-18:00"
-    const timePattern = /(\d{1,2}:\d{2}-\d{1,2}:\d{2})/
-    
+    // Look for time window tags
     for (const tag of tagParts) {
-      const match = tag.match(timePattern)
-      if (match) {
-        const timeValue = match[1]
-        console.log(`Found time window in tag "${tag}": "${timeValue}"`)
+      // Check for time window keywords
+      if (tag.toLowerCase().includes('morning') || 
+          tag.toLowerCase().includes('afternoon') || 
+          tag.toLowerCase().includes('night')) {
+        const timeValue = tag.toLowerCase()
         
-        // Convert time window to job release time (using 24-hour format)
-        switch (timeValue) {
-          case '10:00-14:00':
-            return '08:45'
-          case '11:00-15:00':
-            return '08:45'
-          case '14:00-18:00':
-            return '13:45'
-          case '18:00-22:00':
-            return '17:15'
-          default:
-            console.log(`Unknown time window: ${timeValue}`)
-            return ''
+        // Map time windows to specific times
+        if (timeValue.includes('morning')) {
+          return '09:00'
+        } else if (timeValue.includes('afternoon')) {
+          return '14:00'
+        } else if (timeValue.includes('night')) {
+          return '18:00'
         }
+      }
+      
+      // Check for HH:MM-HH:MM format
+      const timeMatch = tag.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/)
+      if (timeMatch) {
+        return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`
+      }
+      
+      // Check for single time HH:MM format
+      const singleTimeMatch = tag.match(/(\d{1,2}):(\d{2})/)
+      if (singleTimeMatch) {
+        return `${singleTimeMatch[1].padStart(2, '0')}:${singleTimeMatch[2]}`
       }
     }
     
-    console.log(`No time window found in tags`)
     return ''
   }
 
   /**
-   * Extract time window from order tags and convert to delivery completion window
+   * Extract delivery completion time window from order tags
    * Expected format in tags: "14:00-18:00, 18/06/2025, Delivery, Singapore"
-   * Look for time patterns like "hh:mm-hh:mm"
    */
   extractDeliveryCompletionTimeWindow(): string {
     const tags = this.order.tags || ''
     
-    console.log(`Extracting delivery completion time window from tags: "${tags}"`)
-    
-    // Split tags and look for time window patterns
     const tagParts = tags.split(',').map(tag => tag.trim())
     
-    // Look for time window patterns like "14:00-18:00"
-    const timePattern = /(\d{1,2}:\d{2}-\d{1,2}:\d{2})/
-    
+    // Look for time window tags
     for (const tag of tagParts) {
-      const match = tag.match(timePattern)
-      if (match) {
-        const timeValue = match[1]
-        console.log(`Found time window in tag "${tag}": "${timeValue}"`)
+      // Check for time window keywords
+      if (tag.toLowerCase().includes('morning') || 
+          tag.toLowerCase().includes('afternoon') || 
+          tag.toLowerCase().includes('night')) {
+        const timeValue = tag.toLowerCase()
         
-        // Convert time window to delivery completion window
-        switch (timeValue) {
-          case '10:00-14:00':
-            return 'Morning'
-          case '11:00-15:00':
-            return 'Morning'
-          case '14:00-18:00':
-            return 'Afternoon'
-          case '18:00-22:00':
-            return 'Night'
-          default:
-            console.log(`Unknown time window: ${timeValue}`)
-            return ''
+        // Map time windows to specific ranges
+        if (timeValue.includes('morning')) {
+          return '09:00-12:00'
+        } else if (timeValue.includes('afternoon')) {
+          return '14:00-18:00'
+        } else if (timeValue.includes('night')) {
+          return '18:00-21:00'
         }
+      }
+      
+      // Check for HH:MM-HH:MM format
+      const timeMatch = tag.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/)
+      if (timeMatch) {
+        return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}-${timeMatch[3].padStart(2, '0')}:${timeMatch[4]}`
       }
     }
     
-    console.log(`No time window found in tags`)
     return ''
   }
 
   /**
-   * Extract first two letters from order name for Group field
-   * Example: #WF70000 -> WF
+   * Normalize phone number based on format
    */
-  extractGroup(): string {
-    const orderName = this.order.name || ''
-    
-    // Extract characters before the first number
-    const match = orderName.match(/^([^0-9]+)/)
-    let result = match && match[1] ? match[1].replace(/[^A-Za-z]/g, '') : ''
-    
-    // If there are more than 2 characters, take the first two
-    if (result.length > 2) {
-      result = result.substring(0, 2)
-    }
-    
-    return result.toUpperCase()
-  }
-
-  /**
-   * Calculate total number of line items (for both noOfShippingLabels and itemCount)
-   */
-  calculateItemCount(): string {
-    const totalQuantity = this.order.line_items.reduce((sum, item) => {
-      // Only count items that are not removed/cancelled
-      if (item.current_quantity === 0) {
-        return sum
-      }
-      return sum + item.quantity
-    }, 0)
-    
-    return totalQuantity.toString()
-  }
-
-  /**
-   * Extract description by combining line item titles and variant titles
-   */
-  extractDescription(): string {
-    if (!this.order.line_items || this.order.line_items.length === 0) {
-      return ''
-    }
-
-    const descriptions = this.order.line_items
-      .filter(item => !this.isLineItemRemoved(item)) // Only include non-removed items
-      .map(item => {
-        const title = item.title || ''
-        const variantTitle = item.variant_title || ''
-        
-        if (variantTitle) {
-          return `${title} - ${variantTitle}`
-        }
-        return title
-      })
-
-    return descriptions.join(', ')
-  }
-
-  /**
-   * Check if a line item has been removed/cancelled
-   */
-  private isLineItemRemoved(item: ShopifyLineItem): boolean {
-    // Check if current_quantity is 0 (item was reduced to 0)
-    if (item.current_quantity === 0) {
-      return true
-    }
-    
-    // Check if fulfillable_quantity is 0 (item cannot be fulfilled)
-    if (item.fulfillable_quantity === 0) {
-      return true
-    }
-    
-    return false
-  }
-
-  /**
-   * Normalize phone number by removing country codes and formatting
-   * - Remove +65 or 65 prefix for Singapore numbers
-   * - Remove + sign for foreign numbers
-   * - Remove spaces, dashes, parentheses
-   */
-  normalizePhoneNumber(phone: string): string {
+  private normalizePhoneNumber(phone: string, format: string): string {
     if (!phone) return ''
     
-    // Remove spaces, dashes, parentheses
-    let cleaned = phone.replace(/[\s\-()]/g, '')
+    // Remove all spaces and special characters first
+    let cleaned = phone.replace(/[\s\-\(\)\.]/g, '')
     
-    // Remove leading +65 or 65 for Singapore numbers
+    // Handle Singapore numbers (+65)
     if (cleaned.startsWith('+65')) {
-      cleaned = cleaned.slice(3)
-    } else if (cleaned.startsWith('65')) {
-      cleaned = cleaned.slice(2)
+      // Remove +65 and return clean number
+      const number = cleaned.substring(3)
+      return number
     }
     
-    // For foreign numbers, remove leading +
+    // Handle other international numbers (just remove +)
     if (cleaned.startsWith('+')) {
-      cleaned = cleaned.slice(1)
+      const result = cleaned.substring(1)
+      return result
     }
     
+    // Handle local numbers (return as is, no spacing)
     return cleaned
   }
 
   /**
-   * Process a specific field based on its type
+   * Convert time window to job release time according to requirements
    */
-  processField(field: ExtractProcessingField): string {
-    switch (field) {
-      case 'deliveryDate':
-        return this.extractDateFromTags('delivery')
-      case 'processingDate':
-        return this.extractDateFromTags('processing')
-      case 'jobReleaseTime':
-        return this.extractJobReleaseTime()
-      case 'deliveryCompletionTimeWindow':
-        return this.extractDeliveryCompletionTimeWindow()
-      case 'noOfShippingLabels':
-      case 'itemCount':
-        return this.calculateItemCount()
-      case 'group':
-        return this.extractGroup()
-      case 'description':
-        return this.extractDescription()
-      case 'senderNumberOnApp':
-        return this.normalizePhoneNumber(this.order.billing_address?.phone || '')
-      case 'senderPhoneNo':
-        return this.normalizePhoneNumber(this.order.billing_address?.phone || '')
-      case 'recipientPhoneNo':
-        return this.normalizePhoneNumber(this.order.shipping_address?.phone || '')
-      default:
-        return ''
+  private convertTimeWindowToJobReleaseTime(timeWindow: string): string {
+    // Parse the time window (e.g., "14:00-18:00")
+    const match = timeWindow.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/)
+    if (!match) {
+      return timeWindow
     }
+    
+    const startHour = parseInt(match[1], 10)
+    const startMinute = parseInt(match[2], 10)
+    
+    // Apply conversions according to requirements
+    let releaseHour: number
+    let releaseMinute: number
+    
+    if (startHour === 10 && startMinute === 0) {
+      // 10:00-14:00 → 08:45
+      releaseHour = 8
+      releaseMinute = 45
+    } else if (startHour === 14 && startMinute === 0) {
+      // 14:00-18:00 → 13:45
+      releaseHour = 13
+      releaseMinute = 45
+    } else if (startHour === 18 && startMinute === 0) {
+      // 18:00-22:00 → 17:15
+      releaseHour = 17
+      releaseMinute = 15
+    } else {
+      // Default: return original time window
+      return timeWindow
+    }
+    
+    const result = `${releaseHour.toString().padStart(2, '0')}:${releaseMinute.toString().padStart(2, '0')}`
+    return result
   }
 
   /**
-   * Validate if a date string is in dd/mm/yyyy format
+   * Convert time window to delivery completion time window according to requirements
    */
-  private isValidDateFormat(dateStr: string): boolean {
-    const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/
-    return dateRegex.test(dateStr)
+  private convertTimeWindowToDeliveryTimeWindow(timeWindow: string): string {
+    // Parse the time window (e.g., "14:00-18:00")
+    const match = timeWindow.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/)
+    if (!match) {
+      return timeWindow
+    }
+    
+    const startHour = parseInt(match[1], 10)
+    const startMinute = parseInt(match[2], 10)
+    
+    // Apply conversions according to requirements
+    let result: string
+    
+    if (startHour === 10 && startMinute === 0) {
+      // 10:00-14:00 → Morning
+      result = 'Morning'
+    } else if (startHour === 14 && startMinute === 0) {
+      // 14:00-18:00 → Afternoon
+      result = 'Afternoon'
+    } else if (startHour === 18 && startMinute === 0) {
+      // 18:00-22:00 → Night
+      result = 'Night'
+    } else {
+      // Default: return original time window
+      return timeWindow
+    }
+    
+    return result
   }
 
   /**
-   * Parse and format date from various formats to dd/mm/yyyy
+   * Extract value from nested object using dot notation path
    */
-  private parseAndFormatDate(dateStr: string): string {
-    try {
-      // Try to parse the date
-      const date = new Date(dateStr)
-      
-      if (isNaN(date.getTime())) {
+  private extractNestedValue(path: string): string {
+    const parts = path.split('.')
+    let current: any = this.order
+    
+    for (const part of parts) {
+      if (current && typeof current === 'object' && part in current) {
+        current = current[part]
+      } else {
         return ''
       }
-      
-      // Format to dd/mm/yyyy
-      const day = date.getDate().toString().padStart(2, '0')
-      const month = (date.getMonth() + 1).toString().padStart(2, '0')
-      const year = date.getFullYear()
-      
-      return `${day}/${month}/${year}`
-    } catch (error) {
-      console.error('Error parsing date:', dateStr, error)
+    }
+    
+    if (current === null || current === undefined) {
       return ''
     }
+    
+    return String(current)
   }
 
   /**
-   * Get all processed fields for the order
+   * Process line items for item count and shipping labels
    */
-  getAllProcessedFields(): Record<ExtractProcessingField, string> {
-    return {
-      deliveryDate: this.processField('deliveryDate'),
-      processingDate: this.processField('processingDate'),
-      jobReleaseTime: this.processField('jobReleaseTime'),
-      deliveryCompletionTimeWindow: this.processField('deliveryCompletionTimeWindow'),
-      group: this.processField('group'),
-      noOfShippingLabels: this.processField('noOfShippingLabels'),
-      itemCount: this.processField('itemCount'),
-      description: this.processField('description'),
-      senderNumberOnApp: this.processField('senderNumberOnApp'),
-      senderPhoneNo: this.processField('senderPhoneNo'),
-      recipientPhoneNo: this.processField('recipientPhoneNo'),
+  private processLineItems(format: string): string {
+    if (!this.order.line_items || !Array.isArray(this.order.line_items)) {
+      return '0'
     }
+    
+    if (format === 'sum_quantities') {
+      const totalQuantity = this.order.line_items.reduce((sum, item) => {
+        const quantity = item.quantity || 0
+        return sum + quantity
+      }, 0)
+      
+      return String(totalQuantity)
+    }
+    
+    // Default: return number of line items
+    return String(this.order.line_items.length)
+  }
+
+  /**
+   * Extract group from order name
+   */
+  private extractGroup(format: string): string {
+    const orderName = this.order.name || ''
+    
+    if (format === 'first_two_letters') {
+      // Remove # if present and get first two letters
+      const cleanName = orderName.replace('#', '')
+      const result = cleanName.substring(0, 2).toUpperCase()
+      return result
+    }
+    
+    return orderName
+  }
+
+  /**
+   * Generate description from line items
+   */
+  private generateDescription(): string {
+    const lineItems = this.order.line_items || []
+    return lineItems.map(item => `${item.title} - ${item.variant_title || 'Default'}`).join(', ')
+  }
+
+  /**
+   * Calculate total item count
+   */
+  private calculateItemCount(): string {
+    const lineItems = this.order.line_items || []
+    return lineItems.reduce((total, item) => total + (item.quantity || 0), 0).toString()
+  }
+
+  /**
+   * Format shipping address
+   */
+  private formatAddress(): string {
+    const shippingAddress = this.order.shipping_address
+    if (!shippingAddress) return ''
+    const parts = [
+      shippingAddress.address1,
+      shippingAddress.address2,
+      shippingAddress.city,
+      shippingAddress.province,
+      shippingAddress.zip,
+      shippingAddress.country,
+    ].filter(Boolean)
+    return parts.join(', ')
   }
 }
 
 /**
- * Utility function to process a Shopify order with both global mappings and extract processing
+ * Processes a Shopify order to extract and transform data based on mappings.
+ * @param order The raw Shopify order.
+ * @param globalMappings The global field mappings.
+ * @param extractMappings The extract processing mappings.
+ * @returns An array of processed line items.
  */
 export function processShopifyOrder(
   order: ShopifyOrder,
   globalMappings: GlobalFieldMapping[],
-  extractMappings: any[]
+  extractMappings: any[],
+  manuallyEditedFields?: Record<string, boolean>
 ): Record<string, string>[] {
-  const processor = new OrderProcessor(order)
+  const processor = new OrderProcessor(order, extractMappings)
   const result: Record<string, string>[] = []
 
-  console.log('Processing order:', order.name)
-  console.log('Global mappings:', globalMappings.length)
-  console.log('Extract mappings:', extractMappings.length)
-
   // Process extract processing fields first (order-level)
-  const processedFields = processor.getAllProcessedFields()
-  console.log('Extract processed fields:', processedFields)
+  const processedFields = processor.processShopifyOrder()
 
   // Process global field mappings (but don't overwrite extract processing fields)
   const globalMappedFields: Record<string, string> = {}
   globalMappings.forEach(mapping => {
     // Skip if this field was already processed by extract processing
-    if (processedFields[mapping.dashboardField as keyof typeof processedFields] !== undefined) {
-      console.log(`Skipping global mapping for ${mapping.dashboardField} (already processed by extract processing)`)
+    if (processedFields[mapping.dashboardField] !== undefined && processedFields[mapping.dashboardField] !== '') {
       return
     }
 
     if (mapping.noMapping) {
       globalMappedFields[mapping.dashboardField] = ''
-      console.log(`Set ${mapping.dashboardField} = "" (no mapping)`)
       return
     }
 
@@ -381,7 +505,6 @@ export function processShopifyOrder(
 
     const finalValue = values.join(mapping.separator || ' ')
     globalMappedFields[mapping.dashboardField] = finalValue
-    console.log(`Set ${mapping.dashboardField} = "${finalValue}" (from ${mapping.shopifyFields.join(', ')})`)
   })
 
   // Create one row per line item
@@ -390,12 +513,8 @@ export function processShopifyOrder(
     const activeLineItems = order.line_items.filter(item => {
       // Check if current_quantity is 0 (item was reduced to 0)
       if (item.current_quantity === 0) {
-        console.log(`Skipping removed line item: ${item.title} (current_quantity: 0)`)
         return false
       }
-      
-      // Note: We don't check fulfillable_quantity because it becomes 0 when orders are fulfilled
-      // regardless of whether items were removed or not
       
       return true
     })
@@ -412,7 +531,6 @@ export function processShopifyOrder(
         qty: lineItem.quantity.toString(),
       }
 
-      console.log(`Created row ${index + 1} for line item: ${lineItem.title}`)
       result.push(row)
     })
   } else {
@@ -427,7 +545,6 @@ export function processShopifyOrder(
     result.push(row)
   }
 
-  console.log(`Created ${result.length} rows for order ${order.name}`)
   return result
 }
 

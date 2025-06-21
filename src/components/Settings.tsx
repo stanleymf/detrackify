@@ -29,6 +29,7 @@ import {
   EXTRACT_PROCESSING_FIELDS,
 } from "@/types"
 import { storage } from "@/lib/storage"
+import { useToast } from "@/hooks/use-toast"
 
 export function Settings({ 
   viewMode = 'auto', 
@@ -37,6 +38,7 @@ export function Settings({
   viewMode?: 'auto' | 'mobile' | 'desktop'
   onViewModeChange?: (mode: 'auto' | 'mobile' | 'desktop') => void 
 }) {
+  const { toast } = useToast()
   const [settings, setSettings] = useState<AppSettings>({ 
     shopifyStores: [], 
     globalFieldMappings: [],
@@ -157,50 +159,34 @@ export function Settings({
 
   const testDetrackConnection = async () => {
     try {
-      console.log('Testing Detrack connection...')
-      
-      // Show loading state
-      setSaveStatus("idle")
-      
-      // Test the Detrack API connection through our backend
       const response = await fetch('/api/detrack/test', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         credentials: 'include'
       })
-      
-      console.log('Test connection response status:', response.status)
-      
+
+      const data = await response.json()
+
       if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          alert('✅ Detrack connection successful! The API is working correctly.')
-        } else {
-          alert(`❌ Detrack connection failed: ${result.error || 'Unknown error'}`)
-        }
+        toast({
+          title: "Success",
+          description: "Detrack connection successful",
+        })
       } else {
-        const errorData = await response.json()
-        console.error('Detrack connection error:', errorData)
-        
-        let errorMessage = 'Unknown error'
-        if (errorData.error) {
-          errorMessage = errorData.error
-        } else if (response.status === 404) {
-          errorMessage = 'API endpoint not found. Please check your API key and endpoint configuration.'
-        } else if (response.status === 401) {
-          errorMessage = 'Authentication failed. Please check your API key.'
-        } else if (response.status === 400) {
-          errorMessage = 'Invalid request. Please check your configuration.'
-        }
-        
-        alert(`❌ Detrack connection failed: ${errorMessage}`)
+        toast({
+          title: "Error",
+          description: data.error || "Connection failed",
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      console.error('Error testing Detrack connection:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Network error - please check your internet connection'
-      alert(`❌ Error testing Detrack connection: ${errorMessage}`)
+      toast({
+        title: "Error",
+        description: "Connection failed",
+        variant: "destructive",
+      })
     }
   }
 

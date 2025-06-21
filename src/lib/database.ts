@@ -79,88 +79,26 @@ export class DatabaseService {
     return this.db.prepare('SELECT * FROM stores WHERE id = ?').bind(id).first<Store>()
   }
 
-  async updateStore(id: string, updates: Partial<Store>): Promise<void> {
-    // Check if api_secret column exists by trying to update it separately
-    if (updates.api_secret !== undefined) {
+  async updateStore(storeId: string, updates: Partial<Store>): Promise<boolean> {
+    try {
+      // Check if api_secret column exists, if not create it
       try {
-        // Try to update api_secret column
-        await this.db.prepare(`
-          UPDATE stores 
-          SET api_secret = ?, updated_at = ? 
-          WHERE id = ?
-        `).bind(updates.api_secret, new Date().toISOString(), id).run()
-        
-        // Remove api_secret from updates to avoid double update
-        const { api_secret, ...otherUpdates } = updates
-        
-        // Update other fields if any
-        if (Object.keys(otherUpdates).length > 0) {
-          const setClause = Object.keys(otherUpdates).map(key => `${key} = ?`).join(', ')
-          const values = Object.values(otherUpdates)
-          
-          await this.db.prepare(`
-            UPDATE stores 
-            SET ${setClause}, updated_at = ? 
-            WHERE id = ?
-          `).bind(...values, new Date().toISOString(), id).run()
-        }
+        await this.db.prepare('SELECT api_secret FROM stores LIMIT 1').run()
       } catch (error) {
-        console.log('DatabaseService.updateStore: api_secret column not available, attempting to create it...')
-        
-        try {
-          // Try to create the api_secret column
-          await this.db.exec('ALTER TABLE stores ADD COLUMN api_secret TEXT')
-          console.log('DatabaseService.updateStore: Successfully created api_secret column')
-          
-          // Now try the update again
-          await this.db.prepare(`
-            UPDATE stores 
-            SET api_secret = ?, updated_at = ? 
-            WHERE id = ?
-          `).bind(updates.api_secret, new Date().toISOString(), id).run()
-          
-          // Remove api_secret from updates to avoid double update
-          const { api_secret, ...otherUpdates } = updates
-          
-          // Update other fields if any
-          if (Object.keys(otherUpdates).length > 0) {
-            const setClause = Object.keys(otherUpdates).map(key => `${key} = ?`).join(', ')
-            const values = Object.values(otherUpdates)
-            
-            await this.db.prepare(`
-              UPDATE stores 
-              SET ${setClause}, updated_at = ? 
-              WHERE id = ?
-            `).bind(...values, new Date().toISOString(), id).run()
-          }
-        } catch (createError) {
-          console.log('DatabaseService.updateStore: Failed to create api_secret column, skipping api_secret update')
-          
-          // If we can't create the column, update other fields only
-          const { api_secret, ...otherUpdates } = updates
-          
-          if (Object.keys(otherUpdates).length > 0) {
-            const setClause = Object.keys(otherUpdates).map(key => `${key} = ?`).join(', ')
-            const values = Object.values(otherUpdates)
-            
-            await this.db.prepare(`
-              UPDATE stores 
-              SET ${setClause}, updated_at = ? 
-              WHERE id = ?
-            `).bind(...values, new Date().toISOString(), id).run()
-          }
-        }
+        // Column doesn't exist, create it
+        await this.db.prepare('ALTER TABLE stores ADD COLUMN api_secret TEXT').run()
       }
-    } else {
-      // No api_secret update, proceed normally
-      const setClause = Object.keys(updates).map(key => `${key} = ?`).join(', ')
+
+      const updateFields = Object.keys(updates).map(key => `${key} = ?`).join(', ')
       const values = Object.values(updates)
       
-      await this.db.prepare(`
-        UPDATE stores 
-        SET ${setClause}, updated_at = ? 
-        WHERE id = ?
-      `).bind(...values, new Date().toISOString(), id).run()
+      const stmt = this.db.prepare(`UPDATE stores SET ${updateFields} WHERE id = ?`)
+      const result = await stmt.bind(...values, storeId).run()
+      
+      return result.changes > 0
+    } catch (error) {
+      console.error('DatabaseService.updateStore: Error updating store:', error)
+      return false
     }
   }
 
@@ -208,6 +146,7 @@ export class DatabaseService {
     status?: string
     processed_data?: string
     raw_shopify_data?: string
+    manually_edited_fields?: string | null
     exported_at?: string | null
     updated_at?: string
   }): Promise<void> {
@@ -220,28 +159,31 @@ export class DatabaseService {
     await this.db.prepare(`UPDATE orders SET ${setClause} WHERE id = ?`).bind(...values, id).run()
   }
 
-  async deleteAllOrders(): Promise<void> {
-    console.log('DatabaseService.deleteAllOrders: Starting DELETE FROM orders query...')
-    
-    // First, let's check how many orders exist
-    const countResult = await this.db.prepare('SELECT COUNT(*) as count FROM orders').first<{count: number}>()
-    const orderCount = countResult?.count || 0
-    console.log(`DatabaseService.deleteAllOrders: Found ${orderCount} orders to delete`)
-    
-    // Delete all orders
-    const result = await this.db.prepare('DELETE FROM orders').run()
-    console.log('DatabaseService.deleteAllOrders: Query completed, result:', result)
-    console.log(`DatabaseService.deleteAllOrders: Deleted ${result.changes} orders`)
-    
-    // Also clear webhook events to prevent reprocessing
-    const webhookResult = await this.db.prepare('DELETE FROM webhook_events').run()
-    console.log('DatabaseService.deleteAllOrders: Cleared webhook events, result:', webhookResult)
-    console.log(`DatabaseService.deleteAllOrders: Deleted ${webhookResult.changes} webhook events`)
-    
-    // Verify deletion
-    const verifyResult = await this.db.prepare('SELECT COUNT(*) as count FROM orders').first<{count: number}>()
-    const remainingOrders = verifyResult?.count || 0
-    console.log(`DatabaseService.deleteAllOrders: Verification - ${remainingOrders} orders remaining`)
+  async deleteAllOrders(): Promise<{ success: boolean; deletedOrders: number; deletedWebhooks: number }> {
+    try {
+      // First, count existing orders
+      const orderCountResult = await this.db.prepare('SELECT COUNT(*) as count FROM orders').first()
+      const orderCount = orderCountResult?.count || 0
+
+      // Delete all orders
+      const result = await this.db.prepare('DELETE FROM orders').run()
+
+      // Clear webhook events
+      const webhookResult = await this.db.prepare('DELETE FROM webhook_events').run()
+
+      // Verify deletion
+      const remainingOrdersResult = await this.db.prepare('SELECT COUNT(*) as count FROM orders').first()
+      const remainingOrders = remainingOrdersResult?.count || 0
+
+      return {
+        success: true,
+        deletedOrders: result.changes || 0,
+        deletedWebhooks: webhookResult.changes || 0
+      }
+    } catch (error) {
+      console.error('DatabaseService.deleteAllOrders: Error deleting orders:', error)
+      return { success: false, deletedOrders: 0, deletedWebhooks: 0 }
+    }
   }
 
   async getOrdersByStore(storeId: string, limit = 200, offset = 0): Promise<DatabaseOrder[]> {
@@ -298,6 +240,11 @@ export class DatabaseService {
       console.error('Database: Error getting orders by status:', error)
       throw error
     }
+  }
+
+  async getTotalOrderCount(): Promise<number> {
+    const result = await this.db.prepare('SELECT COUNT(*) as count FROM orders').first<{ count: number }>()
+    return result?.count || 0
   }
 
   // Field Mapping Management

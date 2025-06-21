@@ -1,5 +1,5 @@
 // Script to update Detrack configuration to use the correct v2 endpoint
-const API_BASE_URL = 'https://detrackify.stanleytan92.workers.dev'
+const API_BASE_URL = 'https://detrackify.dand3.com'
 
 async function updateDetrackConfig() {
   try {

@@ -11,7 +11,7 @@ const https = require('https');
 
 const shopDomain = process.argv[2];
 const accessToken = process.argv[3];
-const webhookUrl = 'https://detrackify.stanleytan92.workers.dev/api/webhooks/shopify';
+const webhookUrl = 'https://detrackify.dand3.com/api/webhooks/shopify';
 
 if (!shopDomain || !accessToken) {
   console.error('Usage: node register-fulfillment-webhook.js <shop-domain> <access-token>');

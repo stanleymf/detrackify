@@ -2,7 +2,65 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.13.8] - 2025-06-20
+## [0.13.12] - 2025-06-20
+
+### Fixed
+- **Logout URL Persistence** - Fixed issue where clicking logout would show login page but URL remained at `/dashboard`
+- **Refresh Authentication** - Fixed issue where refreshing on login page without credentials would redirect back to dashboard
+- **Session Cleanup** - Improved logout process to clear all cached authentication data and force page reload
+- **Auth Check Logic** - Enhanced authentication status checking to properly handle session validation
+
+### Changed
+- **Logout Process** - Added proper session cleanup and page reload on logout to clear cached state
+- **Authentication Check** - Improved `checkAuthStatus` to parse response data correctly and handle errors
+- **State Management** - Added localStorage cleanup for stale authentication tokens
+- **Error Handling** - Enhanced error handling in authentication flow with proper console logging
+
+### Technical Improvements
+- **Session Management** - Better session token cleanup and validation
+- **Route Protection** - Improved authentication state management for protected routes
+- **User Experience** - Fixed confusing authentication flow where users could access dashboard without proper login
+
+## [0.13.11] - 2025-06-20
+
+### Added
+- **AND/OR Logic for Tag Filtering** - Added support for both OR and AND logic when filtering orders by multiple tags
+- **Filter Mode Selector** - New UI dropdown to choose between OR and AND logic for tag filtering
+- **Advanced Tag Filtering** - Orders can now be filtered to match ALL tags (AND) or ANY tags (OR)
+
+### Changed
+- **Tag Filtering Logic** - Enhanced backend to support both OR and AND filtering modes
+- **API Enhancement** - Added `filterMode` parameter to `/api/fetch-orders` endpoint
+- **UI Enhancement** - Added filter mode selector next to tag input field
+
+### Technical Improvements
+- **Client-Side Filtering** - AND logic implemented with client-side filtering for orders that match ALL specified tags
+- **Shopify API Optimization** - Uses first tag for initial API filtering, then applies additional client-side filtering
+- **Backward Compatibility** - Defaults to OR logic for existing functionality
+
+### User Experience
+- **Flexible Filtering** - Users can now choose between:
+  - **OR Logic**: Orders with ANY of the specified tags (e.g., "urgent" OR "express")
+  - **AND Logic**: Orders with ALL of the specified tags (e.g., "urgent" AND "express")
+
+## [0.13.10] - 2025-06-20
+
+### Fixed
+- **Multiple Tag Filtering** - Fixed issue where multiple comma-separated tags were not working in order fetching
+- **Shopify API Integration** - Updated tag filtering to use correct Shopify API format with multiple &tag= parameters
+- **Tag Parameter Handling** - Each tag is now sent as a separate parameter instead of comma-separated values
+
+### Changed
+- **Tag Filtering Logic** - Changed from comma-separated tag parameter to multiple individual tag parameters
+- **API URL Construction** - Updated to use Shopify's proper multiple tag format: `&tag=tag1&tag=tag2&tag=tag3`
+- **Debug Logging** - Enhanced logging to show all tags being applied
+
+### Technical Improvements
+- **Shopify API Compliance** - Now follows Shopify's official API documentation for multiple tag filtering
+- **OR Logic Support** - Multiple tags now properly use OR logic (orders with ANY of the specified tags)
+- **URL Encoding** - Proper URL encoding for each individual tag parameter
+
+## [0.13.9] - 2025-06-20
 
 ### Fixed
 - **Flower Stands Card Integration** - Fixed Flower Stands card to use Saved Products system instead of Product Labels system
@@ -18,6 +76,17 @@ All notable changes to this project will be documented in this file.
 - **System Consistency** - Eliminated confusion between two separate labeling systems
 - **User Experience** - Flower Stands card now works with labels applied in Saved Products section
 - **Data Integrity** - Single source of truth for product labels and filtering
+
+## [0.13.8] - 2025-06-20
+
+### Changed
+- **Flower Stands Label** - Updated Flower Stands card to check for label 'stands' instead of 'stand'
+- **Product Label Matching** - Flower Stands filtering now uses 'stands' label for better consistency
+- **Debug Logging** - Added console logging to help diagnose Flower Stands card functionality
+
+### Technical Improvements
+- **Label Consistency** - Aligned Flower Stands card with 'stands' label naming convention
+- **Debug Information** - Enhanced logging to show product labels and matching results
 
 ## [0.13.7] - 2025-06-20
 
@@ -322,373 +391,175 @@ All notable changes to this project will be documented in this file.
 - **Project Structure** - Organized project structure for scalability
 - **Development Environment** - Configured development and production environments
 
-## [0.12.0] - 2025-06-20
+## [2024-12-19] - Authentication Flow Fixes
 
 ### Fixed
-- **Database Schema Mismatch** - Fixed critical issue where orders were not being saved due to schema mismatch between code and database
-- **Orders Table Schema** - Updated remote D1 database schema to match code expectations with `processed_data` and `raw_shopify_data` JSON columns
-- **Order Processing** - Resolved `NOT NULL constraint failed: orders.order_number` error that prevented order saves
-- **Webhook Processing** - Orders from Shopify fulfillment webhooks now save successfully to database
-- **Dashboard Order Display** - Orders now appear in dashboard after fulfillment events
+- **Logout URL Persistence**: Fixed issue where clicking logout would show login page but URL remained at `/dashboard`
+- **Refresh Authentication**: Fixed issue where refreshing on login page without credentials would redirect back to dashboard
+- **Session Cleanup**: Improved logout process to clear all cached authentication data and force page reload
+- **Auth Check Logic**: Enhanced authentication status checking to properly handle session validation
 
-### Changed
-- **Database Schema** - Migrated from old field-by-field orders table to new JSON-based schema for better flexibility
-- **Order Storage Format** - Orders now stored as JSON strings (`processed_data` and `raw_shopify_data`) instead of individual columns
-- **Database Migration** - Applied direct schema update to remote D1 database to resolve migration system limitations
+### Technical Changes
+- Added proper session cleanup in `handleLogout` function
+- Improved `checkAuthStatus` to parse response data correctly
+- Added localStorage cleanup for stale authentication tokens
+- Force page reload on logout to clear any cached React state
 
-### Technical Improvements
-- **Type Safety** - Added `DatabaseOrder` interface to properly type database operations
-- **Error Handling** - Improved error handling in database operations with proper TypeScript types
-- **Schema Consistency** - Ensured local and remote database schemas are now aligned
-- **Migration System** - Created migration file for future reference (015_update_orders_schema.sql)
-
-### Root Cause Analysis
-- **Issue**: Remote D1 database had old schema with `order_number` column, but code expected new schema with JSON columns
-- **Impact**: All order saves failed silently with constraint errors
-- **Solution**: Direct schema update to remote database to match code expectations
-- **Prevention**: Future migrations should use proper D1 migration system when available
-
-## [0.11.0] - 2024-12-19
+## [2024-12-19] - Custom Domain Setup
 
 ### Added
-- **Bulk Save Upsert Logic** - Implemented INSERT OR REPLACE functionality to handle duplicate products during bulk save operations
-- **Product Label Support** - Added label column to saved_products table and implemented label application functionality
-- **Bulk Label Application** - New endpoint `/api/saved-products/bulk-label` for applying labels to multiple saved products
-- **Enhanced Save Logging** - Added detailed logging for bulk save operations with counts of saved, skipped, and total processed products
+- **Custom Domain**: Configured `detrackify.dand3.com` subdomain
+- **Cloudflare Integration**: Set up DNS routing through Cloudflare for the new domain
+- **SSL Certificate**: Automatic SSL certificate provision through Cloudflare
 
-### Changed
-- **Bulk Save Behavior** - Changed from simple INSERT to upsert logic to prevent unique constraint violations
-- **Database Schema** - Added `label` column to `saved_products` table via migration `011_add_label_to_saved_products.sql`
-- **Save Product Method** - Added `saveProductUpsert` method to handle duplicate products gracefully
-- **Product Response** - Updated saved products API to include label field in responses
+### Technical Changes
+- Updated `wrangler.jsonc` with custom domain route configuration
+- Added CNAME record for `detrackify.dand3.com` pointing to Workers deployment
+- Configured Cloudflare Workers to respond to custom domain requests
 
-### Fixed
-- **Bulk Save Duplicate Issue** - Fixed issue where only 7 out of 21 products were saved due to unique constraint violations on duplicate products
-- **Label Application Not Working** - Implemented missing `/api/saved-products/bulk-label` endpoint that was being called by frontend
-- **Product Label Persistence** - Labels are now properly saved to database and displayed in the UI
-- **Database Constraint Handling** - Proper handling of `UNIQUE(product_id, user_id)` constraint during bulk operations
-
-### Technical Improvements
-- **Database Migration** - Added migration to support product labels in saved_products table
-- **Error Handling** - Enhanced error handling in bulk operations with detailed logging
-- **API Response Enhancement** - Bulk save now returns detailed statistics about the operation
-- **Database Service Updates** - Added `updateProductLabel` method for label management
-
-## [0.10.0] - 2024-12-19
+## [2024-12-19] - Multi-Tag Filtering Enhancement
 
 ### Added
-- **Enhanced Product Search** - Search bar now searches through product titles, variant titles, and tags for comprehensive filtering
-- **Real-time Search Filtering** - Search results update instantly as you type for better user experience
-- **Automatic Page Reset** - Search automatically resets to page 1 when search term changes to prevent empty pages
-- **Improved Product Pagination** - Fixed pagination to work correctly with search filtering
+- **AND Logic Support**: Added client-side filtering for orders that have ALL specified tags
+- **OR/AND Mode Toggle**: UI option to choose between OR (any tag) and AND (all tags) filtering
+- **Enhanced Tag Input**: Improved tag input handling for multiple tags
 
-### Changed
-- **Search Algorithm** - Enhanced search to use substring matching across multiple product fields
-- **Pagination Logic** - Updated pagination to use filtered results instead of all products
-- **Product Count Display** - Now shows filtered count vs total count for better user feedback
-- **Search Performance** - Optimized search filtering with proper memoization and dependency management
+### Technical Changes
+- Modified backend to support multiple `&tag=` parameters for OR logic
+- Implemented client-side filtering for AND logic by fetching with first tag and filtering locally
+- Added UI toggle between OR and AND filtering modes
+- Updated order fetching logic to handle both filtering modes
+
+## [2024-12-19] - Flower Stands Card Fix
 
 ### Fixed
-- **Search Bar Not Working** - Fixed issue where search bar wouldn't filter products properly
-- **Pagination with Search** - Resolved pagination showing wrong products when search was active
-- **Product Count Accuracy** - Fixed display to show correct filtered product counts
-- **Search Across Tags** - Now properly searches through product tags in addition to titles
-- **Page Navigation** - Fixed pagination to work correctly with search results
+- **Flower Stands Card**: Fixed card not working due to empty product labels
+- **Product Labels Integration**: Updated card to use Saved Products system instead of old product labels
 
-### Technical Improvements
-- **Filtered Product Logic** - Implemented proper filtered product handling with useMemo optimization
-- **Search State Management** - Added useEffect to reset page when search term changes
-- **Component Architecture** - Improved search and pagination component structure
-- **Performance Optimization** - Enhanced memoization for better search performance
+### Technical Changes
+- Modified Flower Stands card to query Saved Products with "stand" label
+- Removed dependency on deprecated product labels system
+- Updated card logic to work with current Saved Products architecture
 
-## [0.9.0] - 2024-12-19
+## [2024-12-19] - Tag Filtering for Order Fetching
 
 ### Added
-- **Enhanced Tag Filtering** - Improved product tag filtering to use substring matching instead of exact matching for better search results
-- **Debug Logging for Tag Filtering** - Added comprehensive debug logging to help troubleshoot tag filtering issues
-- **Collapsible UI Components** - Fixed Collapsible component hierarchy issues and improved Saved Products section UI
+- **Tag-Based Order Fetching**: Added ability to fetch orders by specific tags
+- **Tag Input UI**: Added input field for specifying tags when fetching orders
+- **Enhanced Order Processing**: Improved order fetching with tag filtering support
 
-### Changed
-- **Tag Matching Algorithm** - Changed from exact tag matching to substring matching for more flexible product filtering
-- **Product Filter Logic** - Enhanced filtering to match partial tag names (e.g., "Condolences Stand" now matches products tagged with "Condolences Stand")
-- **UI Component Structure** - Fixed Radix UI Collapsible component nesting to prevent "white screen of death" errors
+### Technical Changes
+- Enhanced backend `/api/fetch-orders` endpoint to accept tag parameters
+- Added tag filtering logic in order fetching process
+- Updated frontend to include tag input in order fetching form
+- Modified Shopify API calls to include tag filtering
 
-### Fixed
-- **Tag Filter Not Working** - Fixed issue where searching for "Condolences Stand" wouldn't find products with that exact tag
-- **Collapsible Component Error** - Resolved "CollapsibleTrigger must be used within Collapsible" error that caused white screen
-- **Product Search Accuracy** - Improved search accuracy for products with multi-word tags or partial tag matches
-- **UI Rendering Issues** - Fixed component hierarchy issues that prevented proper UI rendering
-
-### Technical Improvements
-- **API Route Optimization** - Improved tag filtering logic in handleFetchStoreProducts function
-- **Debug Logging** - Added detailed console logging for tag filtering operations to aid troubleshooting
-- **Component Architecture** - Fixed Radix UI component nesting and improved overall component structure
-
-## [0.8.0] - 2024-06-19
+## [2024-12-19] - Pay Stats Time Window Toggle
 
 ### Added
-- **Multi-Store Order Fetching** - Fetch orders now processes all configured stores automatically instead of requiring individual store selection
-- **Increased Dashboard Capacity** - Dashboard now displays up to 200 orders per page instead of 50 for better data visibility
-- **Phone Number Normalization** - Automatic phone number cleaning for Singapore (+65/65) and international numbers (removes + prefix)
-- **Enhanced Order Refresh** - Improved order refresh after fetch operations with automatic page reset and timing optimizations
-- **Phone Field Processing** - Added phone normalization for `senderNumberOnApp`, `senderPhoneNo`, and `recipientPhoneNo` fields
-- **Detrack API Integration** - Complete API integration with correct v2 endpoint and payload structure
-- **API Testing Framework** - Comprehensive testing suite for Detrack API endpoints and payload variations
-- **Real Data Export Testing** - Testing export functionality with actual dashboard order data
-- **API Permission Analysis** - Identified read-only vs write permissions for API key
-- **Map dashboard field 'Sender's Number To Appear on App' to Detrack's 'order_number' payload field**
-- **Map dashboard field 'Sender's name to appear on app' to Detrack's 'invoice_number' payload field**
-- **Map dashboard field 'First Name' to Detrack's 'deliver_to_collect_from' payload field**
-- **Map dashboard field 'Last Name' to Detrack's 'last_name' payload field**
-- **Removed unsupported or misnamed fields from Detrack payload**
-- **Confirmed successful end-to-end export and field mapping with Detrack API**
-- **Improved Mobile Layout** - Enhanced header layout for better mobile responsiveness with stacked navigation and view mode controls
+- **Time Window Toggle**: Added toggle to filter pay stats by Morning, Afternoon, Night, and Total
+- **Enhanced Analytics**: Improved pay statistics display with time-based filtering
+- **Real-time Updates**: Pay stats update automatically when time window changes
+
+### Technical Changes
+- Added time window state management in Analytics component
+- Implemented filtering logic for different time periods
+- Updated pay calculation functions to support time-based filtering
+- Enhanced UI with toggle buttons for time window selection
+
+## [2024-12-19] - Codebase Cleanup
 
 ### Changed
-- **Dashboard Default Limit** - Increased from 50 to 200 orders per page across all database queries and frontend display
-- **Fetch Orders Behavior** - Now automatically processes all stores in sequence and shows combined results
-- **Order Refresh Logic** - All order-modifying operations now reset to page 1 to show newest orders first
-- **Phone Number Formatting** - Singapore numbers now display without country code, international numbers without + prefix
-- **Database Query Limits** - All order retrieval methods now default to 200 records instead of 50
-- **Detrack Test Endpoint** - Fixed main test endpoint to use correct v2 API format instead of v1
-- **API Payload Structure** - Standardized on v2 API format with proper data wrapping structure
-- **Error Handling** - Enhanced error reporting for API permission and configuration issues
-- **Mobile Navigation** - Reorganized header layout to use a two-row design for better mobile visibility
-- **View Mode Controls** - Simplified view mode buttons on mobile to use icons only for better space efficiency
+- **Test Files Organization**: Moved test files to dedicated `tests/` directory
+- **Scripts Organization**: Organized utility scripts in `scripts/` directory
+- **Documentation Cleanup**: Removed temporary files and organized documentation
+
+### Removed
+- **Temporary Files**: Cleaned up scratch files and temporary documentation
+- **Duplicate Files**: Removed redundant test and script files
+
+## [2024-12-19] - Clear All Orders Bug Fix
 
 ### Fixed
-- **Order Refresh After Fetch** - Fixed issue where orders wouldn't appear after fetching until manual page refresh
-- **Multi-Store Fetch Display** - Orders from all stores now appear in dashboard after fetch operation
-- **Phone Number Consistency** - Standardized phone number format across all phone-related fields
-- **Dashboard Pagination** - Ensures newest orders are always visible after operations that modify order data
-- **API Endpoint Consistency** - All test endpoints now use the correct v2 API format
-- **Payload Format** - Fixed payload structure to match successful GET response format
-- **Test Endpoint Routing** - Corrected main test endpoint to use proper v2 implementation
-- **Detrack Jobs API Endpoint** - Updated Analytics page to use correct Detrack API endpoint format (`type=DeliveryParameters` instead of `type=Delivery&date=`)
-- **Mobile Layout** - Fixed issue where view mode buttons were being cut off on mobile devices
+- **Clear All Orders Button**: Fixed 404 error when clicking "Clear All Orders" button
+- **Route Order Issue**: Resolved backend route ordering problem causing 404 errors
 
-### Technical Improvements
-- **Database Service Updates** - Updated all order retrieval methods to use 200 as default limit
-- **Frontend State Management** - Improved order refresh timing and page state management
-- **Phone Processing Logic** - Added phone normalization in OrderProcessor class with comprehensive test coverage
-- **Migration Support** - Added database migration for phone normalization field mappings
-- **API Authentication** - Confirmed API key is valid and can authenticate successfully
-- **GET Request Success** - Successfully retrieving delivery jobs from Detrack API
-- **Data Structure Analysis** - Analyzed real Detrack job data structure for proper payload formatting
-- **Permission Investigation** - Identified that API key has read-only permissions (GET works, POST fails with 500)
+### Technical Changes
+- Reordered routes in backend to ensure `/api/orders/clear-all` is matched before `/api/orders`
+- Updated route handling to properly process DELETE requests for clearing all orders
 
-### Known Issues
-- **POST Request 500 Error** - All POST requests to create jobs return 500 Internal Server Error
-- **API Key Permissions** - Current API key appears to have read-only permissions only
-- **Write Access Required** - Need Detrack support to grant write permissions for job creation
+## [2024-12-19] - Initial Release
 
-### Next Steps
-- Contact Detrack support to request write permissions for API key
-- Test export functionality with real dashboard order data
-- Implement export UI in dashboard for when permissions are granted
+### Added
+- **Core Application**: Complete Shopify to Detrack order management system
+- **Authentication**: User registration and login system
+- **Dashboard**: Main interface for viewing and managing orders
+- **Settings**: Configuration management for stores and field mappings
+- **Analytics**: Pay statistics and performance metrics
+- **Info**: Product labels and driver information management
+- **Order Processing**: Automated order fetching and processing from Shopify
+- **Detrack Integration**: Export functionality to Detrack delivery system
+- **Webhook Support**: Real-time order updates via Shopify webhooks
 
 ## [Unreleased]
-- Added smart sync for products: only new or updated products are saved to the database on each sync.
-- Fixed saved_products table creation and schema alignment with backend logic.
-- Added updated_at column to saved_products for Shopify product update tracking.
-
-## [0.7.0] - 2024-01-XX
-
-### Added
-- **Mobile Mode** - Comprehensive mobile responsiveness with card-based order view, collapsible controls menu, and mobile-optimized layouts
-- **Mobile Card View** - Orders display as cards on mobile devices with key information and easy selection
-- **Mobile Controls Menu** - Collapsible menu for filters and actions on mobile devices
-- **Mobile Layout Optimizations** - Responsive stats cards, Express orders grid, and header layout for mobile screens
-- **View Mode Toggle** - Manual toggle between Auto (responsive), Mobile (card view), and Desktop (table view) modes
-- **CSV Export** - Export filtered orders to CSV file with all visible columns and proper data formatting
-
-### Fixed
-- **Store Breakdown Calculation** - Fixed store breakdown stat card to count unique orders instead of line items per store prefix
-
-### Planned
-- Shopify OAuth flow for store connection
-- Order dashboard with real-time data
-- Detrack API integration
-- Shopify app installation flow
-- Webhook registration automation
-- Order export to Detrack
-- Advanced field mapping UI
-- Order status tracking and management
-
-## [0.6.0] - 2024-01-XX
-
-### Added
-- **Flower Stands Stat Card** - New Dashboard stat card that filters orders based on Product Labels with "Stand" label
-- **Product Labels Integration** - Flower Stands card automatically maps order descriptions to Product Labels from Info page
-- **Smart Order Filtering** - Identifies orders containing products labeled as "Stand" for specialized tracking
-- **Express Orders Address Display** - Enhanced Express stat card in Dashboard to show delivery addresses alongside order numbers and line items
-- **Address Field Integration** - Express orders now display complete delivery information including addresses with location pin emoji (📍)
-- **Improved Express Order Visibility** - Better identification and management of Express deliveries with full address context
 
 ### Changed
-- **Flower Stands Data Processing** - Real-time filtering of orders based on Product Labels configuration
-- **Express Stat Card Layout** - Updated Express orders display to include address field for better delivery management
-- **Express Order Data Structure** - Enhanced data collection to capture and display delivery addresses
-- **Dashboard Stat Cards** - Added new Flower Stands section with responsive grid layout matching Express orders design
+- Updated webhook endpoint URLs from `https://detrackify.stanleytan92.workers.dev` to `https://detrackify.dand3.com`
+- Updated all test scripts and documentation to use the new domain
+- Deployed with new domain configuration
+
+### Enhanced
+- **Mobile-Friendly Navigation**: Completely redesigned navigation tabs for better mobile experience
+  - Added responsive design with mobile-first approach
+  - Implemented touch-friendly interactions with scale animations
+  - Added emoji icons for mobile view (📊📈ℹ️⚙️) and full text for desktop
+  - Enhanced accessibility with proper ARIA labels
+  - Improved touch targets and spacing for mobile devices
+  - Added active state animations and hover effects
+  - Optimized layout for different screen sizes
+
+### Cleaned Up
+- **Debug Log Removal**: Removed excessive console.log statements from production code
+  - Cleaned up debug logs from worker/index.ts (webhook handler, API routes)
+  - Removed debug logs from Dashboard component (export, flower stands filtering)
+  - Cleaned up debug logs from Info component (product fetching, store loading)
+  - Removed debug logs from Login and Settings components
+  - Cleaned up debug logs from orderProcessor.ts and database.ts
+  - Kept essential error logging (console.error) for debugging issues
+  - Improved code readability and reduced console noise
 
 ### Fixed
-- **Case-Insensitive Driver Matching** - Fixed driver name matching in Analytics Part-Time Pay to work regardless of case sensitivity
-- **Product Labels Field Mapping** - Resolved field mapping issue causing product labels to disappear on page refresh
-- **Driver Order Assignment** - Improved accuracy of driver order matching and pay calculations
-- **Product Labels Data Persistence** - Fixed database field mapping from snake_case to camelCase for frontend compatibility
+- **Export to Detrack 500 Error**: Fixed missing variable declarations in handleExportToDetrack function
+  - Added missing `exportResults`, `errorCount`, and `successCount` variable declarations
+  - Resolved 500 Internal Server Error when exporting orders to Detrack
+  - Export functionality now works correctly with proper error tracking and success reporting
 
-## [0.5.1] - 2024-01-XX
-
-### Fixed
-- **Removed Line Items Filtering** - Fixed order processing to properly filter out line items with `current_quantity === 0` (removed items)
-- **Item Count Calculation** - Updated `calculateItemCount()` method to only count active line items (current_quantity > 0)
-- **Description Field Accuracy** - Fixed description field to show actual product names instead of blank values
-- **Shipping Labels Count** - Corrected shipping labels count to reflect actual number of active items
-- **Order Processing Logic** - Improved filtering to distinguish between fulfilled items and actually removed items
-
-### Changed
-- **Line Item Processing** - Modified order processing to skip line items with current_quantity of 0
-- **Item Counting Logic** - Updated counting method to use same filtering logic as line item processing
-- **Data Accuracy** - Enhanced order data accuracy by properly handling removed line items
-
-## [0.5.0] - 2024-01-XX
-
-### Added
-- **Enhanced Dashboard Statistics** - Fixed order counting to show unique orders instead of line items
-- **Store Breakdown Stat Card** - New stat card showing orders by store prefix (e.g., WF, FL, SG) with top store count and additional store breakdown
-- **Express Orders Stat Card** - Specialized stat card that identifies and displays Express delivery orders with full line item details
-- **Improved Stats Layout** - Expanded dashboard grid from 4 to 6 columns to accommodate new stat cards
-- **Smart Order Deduplication** - Stats now correctly count unique orders rather than individual line items
-- **Express Order Detection** - Automatic detection of Express orders by searching line item descriptions for "express" keyword
-- **Store Prefix Extraction** - Intelligent extraction of store prefixes from order numbers (e.g., "WF" from "#WF10000")
-
-### Changed
-- **Stats Calculation Logic** - Modified all stat calculations to count unique orders instead of total line items
-- **Dashboard Grid Layout** - Updated from 4-column to 6-column grid for better stat card organization
-- **Express Orders Display** - Shows delivery order number and complete line item title + variant title for Express orders
-- **Store Breakdown Display** - Shows top store count with additional stores listed below in compact format
-- **Color Coding** - Added purple color scheme for Express orders card and blue for store breakdown card
+## [2024-12-19] - Fixed Editable Fields Not Saving & Preserved Manual Edits
 
 ### Fixed
-- **Incorrect Order Counts** - Fixed issue where stats showed line item counts instead of unique order counts
-- **Duplicate Order Counting** - Orders with multiple line items now count as 1 order instead of multiple
-- **Status Count Accuracy** - Status-based stats (Ready for Export, Exported, Errors) now correctly count unique orders
-- **Express Order Visibility** - Express orders are now prominently displayed for easy identification and management
+- **Dashboard Cell Editing**: Fixed issue where editable fields in the dashboard table were not saving changes to the database
+- **Order ID Resolution**: Fixed 404 error when editing fields by properly extracting base order ID from line item IDs
+- **Extract Processing Mapping Preservation**: Fixed issue where manually edited fields were being overwritten by Extract Processing Mapping logic
+- Added new PUT `/api/orders/:id` endpoint to handle order field updates
+- Updated `handleCellSave` function to call the API endpoint instead of just refreshing data
+- Made `handleCellSave` and `handleKeyDown` functions async to properly handle API calls
+- Added proper error handling and user feedback for failed saves
 
-## [0.4.0] - 2024-01-XX
+### Enhanced
+- **Manual Edit Tracking**: Added system to track which fields have been manually edited
+- **Field Preservation**: Implemented logic to preserve manually edited fields during order reprocessing
+- **Database Schema**: Added `manually_edited_fields` column to orders table to track edited fields
+- **Processing Logic**: Created `reprocessShopifyOrder` function that preserves manual edits during reprocessing
 
-### Added
-- Comprehensive Shopify Order Fields Integration - Added all official Shopify Order API fields (2024-01) for complete field mapping coverage
-- Enhanced Settings UI - Grouped Shopify fields in dropdown by category (Order, Customer, Shipping Address, Billing Address, Line Items, Fulfillments, Advanced)
-- Official Shopify Field Support - Added support for all standard Shopify order fields including id, name, order_number, email, phone, created_at, financial_status, fulfillment_status, etc.
-- Advanced Field Categories - Added support for metafields, discount_applications, shipping_lines, and other advanced Shopify fields
-- Improved Field Mapping UX - Clear visual grouping and labeling of Shopify fields in the mapping dropdown for easier configuration
-
-### Changed
-- Updated SHOPIFY_FIELDS array to include all official Shopify Order API fields instead of limited subset
-- Enhanced Settings component dropdown to group fields by category with clear section headers
-- Improved field mapping organization - Fields are now logically grouped for better user experience
-- Updated field mapping system to support all Shopify order data types and structures
-- Replaced custom field prefixes (e.g., "order.name") with official Shopify field names (e.g., "name")
-
-### Fixed
-- Limited field mapping options - Now supports all official Shopify Order fields for maximum flexibility
-- Field mapping confusion - Clear grouping and labeling makes it easier to find and map the right fields
-- Shopify API compatibility - All field mappings now use official Shopify field names and paths
-- Field mapping completeness - No more missing fields that users might need for their specific use cases
-
-## [0.3.0] - 2024-01-XX
-
-### Added
-- Backend Database Integration for Stores - Stores are now saved to and loaded from the backend database instead of localStorage
-- Enhanced Logging for Order Fetching - Detailed logging throughout the fetch orders process for better debugging
-- Store Management API Integration - Frontend now communicates with backend store management endpoints
-- Automatic Store Loading - Stores are automatically loaded from database when Settings page loads
-- Store Creation/Deletion API Calls - Add and remove stores now use backend API endpoints
-
-### Changed
-- Settings component now saves stores to backend database instead of localStorage
-- Store data format mapping between frontend and backend schemas
-- Store management functions are now async and handle API responses
-- Enhanced error handling for store operations with user feedback
-- Improved store data consistency between frontend and backend
-
-### Fixed
-- Frontend-backend store disconnect - Stores added in Settings now persist in database
-- Fetch Orders functionality - Now finds stores in database and can fetch orders from Shopify
-- Store data synchronization - Frontend and backend now share the same store data
-- Order fetching process - Detailed logging shows exactly what happens during fetch operations
-
-## [0.2.0] - 2024-01-XX
-
-### Added
-- Extract Processing Fields UI protection
-- Auto-processed field indicators with info badges
-- Read-only configuration for special processing fields
-- Clear explanations for each auto-processed field
-- Type system improvements for field mapping structure
-- Auto-save dashboard configuration - Column visibility and resizing preferences now persist across page refreshes
-- Dashboard column configuration storage and retrieval system
-- Field Mapping Save Button - Save field mappings to database with visual feedback
-- Database Integration for Field Mappings - Frontend configuration now communicates with database
-- Global Field Mapping System - Centralized field mapping configuration for all stores
-- Order Processing with Database Mappings - Orders are processed using saved field mappings from database
-- Dashboard Date Filter - Filter orders by Delivery Date field with dropdown selector
-- Dashboard Timeslot Filter - Filter orders by Delivery Completion Time Window (Morning/Afternoon/Night)
-- Improved Dashboard Layout - Fixed horizontal scrolling with proper table structure
-
-### Changed
-- Updated Settings component to prevent manual configuration of Extract Processing Fields
-- Enhanced field mapping UI with visual indicators for auto-processed fields
-- Improved type safety with GlobalFieldMapping and ExtractProcessingMapping interfaces
-- Updated storage layer to use correct property names and types
-- Dashboard component now loads saved column configuration on mount
-- Column visibility and width changes are automatically saved to localStorage
-- Field mappings now persist in database - No longer lost on page refresh
-- Order processing uses database mappings - Shopify orders are processed through configured field mappings
-- Database service updated to support global field mappings with special 'global' store ID
-- Dashboard filtering logic - Stats cards and selection now respect active filters
-- Table layout improvements - Added flex-shrink-0 to prevent column compression
-
-### Fixed
-- Type inconsistencies between frontend and backend field mapping structures
-- Storage layer property name mismatches
-- Import/export type definitions
-- Settings page crash due to localStorage data migration issues
-- Added defensive programming to handle undefined values in Settings component
-- Automatic migration from old fieldMappings to new globalFieldMappings property
-- Horizontal scrolling issues - Table now properly scrolls horizontally without breaking layout
-- Column width preservation - Columns maintain their widths during scrolling
-- Select component error - Fixed empty string value issue in dashboard filters
-- Field mappings authentication - Made field mappings endpoints public for configuration access
-
-## [0.1.0] - 2024-01-XX
-
-### Added
-- Initial project setup with React + TypeScript + Vite
-- UI components using shadcn/ui
-- Basic project structure
-- Shopify API and crypto-js dependencies
-- Comprehensive Shopify webhook types and interfaces
-- Order processing logic with field mapping system
-- Two types of field mapping: Global Field Mappings and Extract Processing Mappings
-- Special field processing for dates, times, descriptions, and item counts
-- Test order processor with sample data
-- Cloudflare D1 database setup with complete schema
-- Cloudflare KV namespace for session management
-- Comprehensive database service layer with CRUD operations
-- Authentication system with login/register functionality
-- Session management with secure cookies
-- Cloudflare Worker with full API endpoints
-- Shopify webhook endpoint with HMAC verification
-- Field mapping persistence and auto-saving
-- Login/Register UI components
-- Protected routes and authentication middleware
-- Project initialization
-- Basic UI framework setup
-- Development environment configuration
-- Shopify API integration foundation
-- Field mapping system architecture
-- Cloudflare deployment infrastructure
-- Database persistence layer
-- Authentication and session management 
+### Technical Details
+- Created `handleUpdateOrder` function in worker to process order updates
+- Updates are applied to the processed_data JSON field in the database
+- Local state is updated immediately after successful API call for better UX
+- Added validation to ensure order exists before attempting update
+- Fixed order ID resolution by using `getBaseOrderId` function to extract base ID from line item IDs (e.g., "orderId-0" → "orderId")
+- Properly calculates lineItemIndex from the order ID suffix for accurate field updates
+- Added `manually_edited_fields` column to database schema (migration 016)
+- Updated `DatabaseOrder` interface to include the new column
+- Modified order processing logic to skip Extract Processing for manually edited fields
+- Created `reprocessShopifyOrder` function that preserves manual edits during reprocessing
+- Updated database service to handle the new column in create and update operations 

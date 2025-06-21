@@ -44,6 +44,7 @@ export interface DatabaseOrder {
   status: string
   processed_data: string // JSON string of processed order data
   raw_shopify_data: string // JSON string of original Shopify data
+  manually_edited_fields: string | null // JSON string of manually edited field flags
   created_at: string
   updated_at: string
   exported_at: string | null
@@ -111,22 +112,68 @@ export interface AppSettings {
   }
 }
 
-// Special processing fields that require logic
-export const EXTRACT_PROCESSING_FIELDS = [
-  'deliveryDate',
-  'processingDate', 
-  'jobReleaseTime',
-  'deliveryCompletionTimeWindow',
-  'group',
-  'noOfShippingLabels',
-  'itemCount',
-  'description',
-  'senderNumberOnApp',
-  'senderPhoneNo',
-  'recipientPhoneNo'
-] as const
+// A more robust definition for extract processing fields
+export interface ExtractProcessingField {
+  dashboardField: string
+  shopifyFields: string[] // e.g., ['tags'], ['note_attributes'], ['line_item_properties'], ['customer.phone']
+  valuePattern?: string // regex pattern to extract value
+  separator?: string
+  noMapping: boolean
+}
 
-export type ExtractProcessingField = typeof EXTRACT_PROCESSING_FIELDS[number]
+// Special processing fields that require logic
+export const EXTRACT_PROCESSING_FIELDS: ExtractProcessingField[] = [
+  {
+    dashboardField: 'deliveryDate',
+    shopifyFields: ['tags'],
+    valuePattern: '(\\d{2}/\\d{2}/\\d{4})',
+    noMapping: false,
+  },
+  {
+    dashboardField: 'processingDate',
+    shopifyFields: ['tags'],
+    valuePattern: '(\\d{2}/\\d{2}/\\d{4})',
+    noMapping: false,
+  },
+  {
+    dashboardField: 'jobReleaseTime',
+    shopifyFields: ['tags'],
+    valuePattern: '(\\d{2}:\\d{2})',
+    noMapping: false,
+  },
+  {
+    dashboardField: 'deliveryCompletionTimeWindow',
+    shopifyFields: ['tags'],
+    valuePattern: '(\\d{2}:\\d{2}-\\d{2}:\\d{2})',
+    noMapping: false,
+  },
+  {
+    dashboardField: 'group',
+    shopifyFields: ['name'],
+    valuePattern: '^#([A-Z]+)',
+    noMapping: false,
+  },
+  { dashboardField: 'noOfShippingLabels', shopifyFields: [], noMapping: true },
+  { dashboardField: 'itemCount', shopifyFields: ['line_items'], noMapping: false },
+  { dashboardField: 'description', shopifyFields: ['line_items'], noMapping: false },
+  {
+    dashboardField: 'senderNumberOnApp',
+    shopifyFields: ['phone'],
+    noMapping: false,
+  },
+  {
+    dashboardField: 'senderPhoneNo',
+    shopifyFields: ['phone'],
+    noMapping: false,
+  },
+  {
+    dashboardField: 'recipientPhoneNo',
+    shopifyFields: ['shipping_address.phone'],
+    noMapping: false,
+  },
+]
+
+export type ExtractProcessingFieldKey = typeof EXTRACT_PROCESSING_FIELDS[number]['dashboardField']
 
 export const DASHBOARD_FIELDS = [
   "deliveryOrderNo",
