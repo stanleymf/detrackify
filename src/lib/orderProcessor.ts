@@ -308,6 +308,10 @@ export class OrderProcessor {
       // 10:00-14:00 → 08:45
       releaseHour = 8
       releaseMinute = 45
+    } else if (startHour === 11 && startMinute === 0) {
+      // 11:00-15:00 → 08:45
+      releaseHour = 8
+      releaseMinute = 45
     } else if (startHour === 14 && startMinute === 0) {
       // 14:00-18:00 → 13:45
       releaseHour = 13
@@ -343,6 +347,9 @@ export class OrderProcessor {
     
     if (startHour === 10 && startMinute === 0) {
       // 10:00-14:00 → Morning
+      result = 'Morning'
+    } else if (startHour === 11 && startMinute === 0) {
+      // 11:00-15:00 → Morning
       result = 'Morning'
     } else if (startHour === 14 && startMinute === 0) {
       // 14:00-18:00 → Afternoon

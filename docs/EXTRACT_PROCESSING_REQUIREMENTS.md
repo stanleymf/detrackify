@@ -51,6 +51,7 @@ The following fields are processed using custom logic in the backend. They do no
 - **Output Format**: Specific time in `hh:mm` format
 - **Conversions**:
   - `time_window:10:00-14:00` → `08:45`
+  - `time_window:11:00-15:00` → `08:45`
   - `time_window:14:00-18:00` → `13:45`
   - `time_window:18:00-22:00` → `17:15`
 
@@ -60,6 +61,7 @@ The following fields are processed using custom logic in the backend. They do no
 - **Output Format**: Text label
 - **Conversions**:
   - `time_window:10:00-14:00` → `Morning`
+  - `time_window:11:00-15:00` → `Morning`
   - `time_window:14:00-18:00` → `Afternoon`
   - `time_window:18:00-22:00` → `Night`
 

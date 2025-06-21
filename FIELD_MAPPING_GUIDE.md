@@ -68,6 +68,7 @@ delivery_date:20/01/2024, processing_date:18/01/2024, priority:high
 
 **Conversions**:
 - `10:00-14:00` → `8:45am`
+- `11:00-15:00` → `8:45am`
 - `14:00-18:00` → `1:45pm`
 - `18:00-22:00` → `5:15pm`
 
@@ -84,6 +85,7 @@ time_window:14:00-18:00, delivery_date:20/01/2024
 
 **Conversions**:
 - `10:00-14:00` → `Morning`
+- `11:00-15:00` → `Morning`
 - `14:00-18:00` → `Afternoon`
 - `18:00-22:00` → `Night`
 

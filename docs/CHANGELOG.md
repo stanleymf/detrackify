@@ -1,3 +1,14 @@
+## [0.15.0] - 2025-06-21
+
+### Added
+- **New Time Window Mapping**: Added support for "11:00-15:00" time window in extract processing mappings
+- **Job Release Time**: "11:00-15:00" now maps to "08:45" (same as 10:00-14:00)
+- **Delivery Completion Time Window**: "11:00-15:00" now maps to "Morning" (same as 10:00-14:00)
+
+### Updated
+- **Documentation**: Updated `EXTRACT_PROCESSING_REQUIREMENTS.md` and `FIELD_MAPPING_GUIDE.md` with new time window conversions
+- **Order Processor**: Enhanced time window conversion logic in `src/lib/orderProcessor.ts`
+
 ## [0.14.0] - 2025-06-21
 
 ### Added
