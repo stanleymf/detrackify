@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0] - 2025-06-22
+
+### Added
+- **Order Dashboard Search**: Added a search bar to the Order Dashboard to filter orders by any field.
+- **Default AND Filter**: Changed the default tag filter mode to "AND" for fetching orders from Shopify.
+
+## [0.15.0] - 2025-06-21
+
+### Added
+- **New Time Window Mapping**: Added support for "11:00-15:00" time window in extract processing mappings
+
+## [0.13.13] - 2025-06-21
+
+### Added
+- **Enhanced Time Window Mappings** - Added new time window ranges for job release time and delivery completion time window
+- **Evening Range Support** - Added 18:00-22:00 range mapping for both job release time (→ 17:15) and delivery completion time window (→ Night)
+- **Comprehensive Documentation** - Created `docs/TIME_WINDOW_MAPPINGS.md` with complete list of all time window mappings
+
+### Changed
+- **Time Window Logic** - Enhanced range-based time window conversion to support evening deliveries
+- **Job Release Time** - Added 18:00-22:00 range that converts to "17:15"
+- **Delivery Completion Time Window** - Added 18:00-22:00 range that converts to "Night"
+
+### Technical Improvements
+- **Range-Based Logic** - All time window conversions now use consistent range-based matching
+- **Documentation** - Complete documentation of all time window mappings with examples and implementation details
+- **Code Consistency** - Standardized time window conversion logic across both job release time and delivery completion time window
+
+### Time Window Mappings Summary
+**Job Release Time:**
+- 10:00-14:00 → 08:45
+- 14:00-18:00 → 13:45
+- 18:00-22:00 → 17:15
+
+**Delivery Completion Time Window:**
+- 10:00-14:00 → Morning
+- 14:00-18:00 → Afternoon
+- 18:00-22:00 → Night
+
 ## [0.13.12] - 2025-06-20
 
 ### Fixed

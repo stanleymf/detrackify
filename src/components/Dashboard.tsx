@@ -47,7 +47,8 @@ export function Dashboard({
   const [selectedDate, setSelectedDate] = useState<string>('all')
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>('all')
   const [orderTagFilter, setOrderTagFilter] = useState('')
-  const [orderFilterMode, setOrderFilterMode] = useState<'OR' | 'AND'>('OR')
+  const [orderFilterMode, setOrderFilterMode] = useState<'OR' | 'AND'>('AND')
+  const [searchQuery, setSearchQuery] = useState('')
   const [columnConfigs, setColumnConfigs] = useState<DashboardColumnConfig[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(200)
@@ -152,6 +153,15 @@ export function Dashboard({
 
   // Filter orders based on date and timeslot
   const filteredOrders = Array.isArray(orders) ? orders.filter((order) => {
+    // Search filter
+    if (searchQuery) {
+      const lowercasedQuery = searchQuery.toLowerCase()
+      const isMatch = Object.values(order).some((value) => 
+        typeof value === 'string' && value.toLowerCase().includes(lowercasedQuery)
+      )
+      if (!isMatch) return false
+    }
+
     const deliveryDate = order.deliveryDate
     const timeWindow = order.deliveryCompletionTimeWindow
 
@@ -1015,6 +1025,12 @@ export function Dashboard({
             
             {/* Desktop Controls */}
             <div className={`gap-2 ${isMobile ? 'hidden' : 'flex'}`}>
+              <Input
+                placeholder="Search orders..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-64"
+              />
               {/* Date Filter */}
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -1092,6 +1108,11 @@ export function Dashboard({
           {/* Mobile Controls Menu */}
           {isMobile && mobileMenuOpen && (
             <div className="mt-4 space-y-3 border-t pt-4">
+              <Input
+                placeholder="Search orders..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
               {/* Date Filter */}
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
