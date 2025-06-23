@@ -585,7 +585,32 @@ export function Dashboard({
         .map(tag => tag.trim())
         .filter(tag => tag.length > 0)
       
-      const requestBody = tags.length > 0 ? { tags, filterMode: orderFilterMode } : {}
+      // Extract date information from tags for filter criteria
+      const filterCriteria: { deliveryDate?: string, processingDate?: string } = {}
+      
+      tags.forEach(tag => {
+        // Look for date patterns in the tag
+        const dateMatch = tag.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+        if (dateMatch) {
+          const date = dateMatch[0] // e.g., "23/06/2025"
+          
+          // If tag contains "delivery" or "processing", assign accordingly
+          if (tag.toLowerCase().includes('delivery')) {
+            filterCriteria.deliveryDate = date
+          } else if (tag.toLowerCase().includes('processing')) {
+            filterCriteria.processingDate = date
+          } else {
+            // If no specific type mentioned, assume delivery date
+            filterCriteria.deliveryDate = date
+          }
+        }
+      })
+      
+      const requestBody = tags.length > 0 ? { 
+        tags, 
+        filterMode: orderFilterMode,
+        filterCriteria: Object.keys(filterCriteria).length > 0 ? filterCriteria : undefined
+      } : {}
       
       const response = await fetch('/api/fetch-orders', { 
         method: 'POST', 

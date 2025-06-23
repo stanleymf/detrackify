@@ -951,7 +951,7 @@ async function handleSaveGlobalFieldMappings(request: Request, db: DatabaseServi
 	}
 }
 
-async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, extractMappings: any, tags?: string[], filterMode: 'OR' | 'AND' = 'OR'): Promise<{ storeId: string, storeName: string, fetched: number, saved: number, errors: string[] }> {
+async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, extractMappings: any, tags?: string[], filterMode: 'OR' | 'AND' = 'OR', filterCriteria?: { deliveryDate?: string, processingDate?: string }): Promise<{ storeId: string, storeName: string, fetched: number, saved: number, errors: string[] }> {
 	const results = { storeId: store.id, storeName: store.store_name, fetched: 0, saved: 0, errors: [] as string[] }
 	try {
 		console.log(`Fetching orders from Shopify store: ${store.store_name} (${store.shopify_domain})`)
@@ -1023,11 +1023,12 @@ async function fetchOrdersFromShopify(db: any, store: any, globalMappings: any, 
 			try {
 				console.log(`Processing order: ${shopifyOrder.name} (ID: ${shopifyOrder.id})`)
 				
-				const processedDataArray = processShopifyOrder(shopifyOrder, globalMappings, extractMappings)
+				const processedDataArray = processShopifyOrder(shopifyOrder, globalMappings, extractMappings, filterCriteria)
 				
 				const existingOrder = await db.getOrderByShopifyId(store.id, shopifyOrder.id)
 				if (existingOrder) {
 					console.log(`Order ${shopifyOrder.name} already exists, updating it.`)
+					
 					await db.updateOrder(existingOrder.id, {
 						processed_data: JSON.stringify(processedDataArray),
 						raw_shopify_data: JSON.stringify(shopifyOrder),
@@ -1068,15 +1069,20 @@ async function handleFetchOrders(request: Request, db: DatabaseService): Promise
 		// Parse request body for optional tag filtering
 		let tags: string[] | undefined
 		let filterMode: 'OR' | 'AND' = 'OR'
+		let filterCriteria: { deliveryDate?: string, processingDate?: string } | undefined
 		try {
 			const requestBody = await request.json()
 			if (requestBody.tags && Array.isArray(requestBody.tags)) {
 				tags = requestBody.tags.filter((tag: string) => tag && tag.trim())
-				console.log(`Tag filtering requested: ${tags.join(', ')}`)
+				console.log(`Tag filtering requested: ${tags?.join(', ')}`)
 			}
 			if (requestBody.filterMode && (requestBody.filterMode === 'OR' || requestBody.filterMode === 'AND')) {
 				filterMode = requestBody.filterMode
 				console.log(`Filter mode requested: ${filterMode}`)
+			}
+			if (requestBody.filterCriteria && typeof requestBody.filterCriteria === 'object') {
+				filterCriteria = requestBody.filterCriteria
+				console.log(`Filter criteria provided:`, filterCriteria)
 			}
 		} catch (e) {
 			// No request body or invalid JSON - continue without tags
@@ -1108,7 +1114,7 @@ async function handleFetchOrders(request: Request, db: DatabaseService): Promise
 		
 		for (const store of stores) {
 			console.log(`Processing store: ${store.store_name} (${store.shopify_domain})`)
-			const res = await fetchOrdersFromShopify(db, store, globalMappings, extractMappings, tags || [], filterMode)
+			const res = await fetchOrdersFromShopify(db, store, globalMappings, extractMappings, tags || [], filterMode, filterCriteria)
 			console.log(`Store ${store.store_name} result:`, res)
 			results.push(res)
 		}

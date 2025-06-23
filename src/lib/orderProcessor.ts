@@ -4,10 +4,15 @@ import type { GlobalFieldMapping } from '@/types'
 export class OrderProcessor {
   private order: ShopifyOrder
   private extractMappings: any[]
+  private filterCriteria?: {
+    deliveryDate?: string
+    processingDate?: string
+  }
 
-  constructor(order: ShopifyOrder, extractMappings: any[]) {
+  constructor(order: ShopifyOrder, extractMappings: any[], filterCriteria?: { deliveryDate?: string, processingDate?: string }) {
     this.order = order
     this.extractMappings = extractMappings
+    this.filterCriteria = filterCriteria
   }
 
   /**
@@ -158,10 +163,38 @@ export class OrderProcessor {
    * Extract date from order tags in dd/mm/yyyy format
    * Expected format in tags: "14:00-18:00, 18/06/2025, Delivery, Singapore"
    * Look for date patterns like "dd/mm/yyyy" or "dd-mm-yyyy" or "yyyy-mm-dd"
+   * Prioritizes dates that match the filter criteria
    */
   private extractDateFromTags(dateType: 'delivery' | 'processing'): string {
     const tags = this.order.tags || ''
     const tagParts = tags.split(',').map(tag => tag.trim())
+    
+    // If we have filter criteria, prioritize matching dates
+    if (this.filterCriteria) {
+      const filterDate = dateType === 'delivery' ? this.filterCriteria.deliveryDate : this.filterCriteria.processingDate
+      
+      if (filterDate) {
+        // First, look for exact matches with the filter date
+        for (const tag of tagParts) {
+          if (tag.toLowerCase().includes(dateType)) {
+            // Check if this tag contains the filter date
+            if (tag.includes(filterDate)) {
+              let dateMatch = tag.match(/(\d{4})-(\d{2})-(\d{2})/)
+              if (dateMatch) return `${dateMatch[3]}/${dateMatch[2]}/${dateMatch[1]}`
+              dateMatch = tag.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+              if (dateMatch) return `${dateMatch[1]}/${dateMatch[2]}/${dateMatch[3]}`
+              dateMatch = tag.match(/(\d{2})-(\d{2})-(\d{4})/)
+              if (dateMatch) return `${dateMatch[1]}/${dateMatch[2]}/${dateMatch[3]}`
+              const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/
+              dateMatch = tag.match(dateRegex)
+              if (dateMatch) return `${dateMatch[1].padStart(2, '0')}/${dateMatch[2].padStart(2, '0')}/${dateMatch[3]}`
+            }
+          }
+        }
+      }
+    }
+    
+    // Fall back to existing logic if no filter match found
     for (const tag of tagParts) {
       if (tag.toLowerCase().includes(dateType)) {
         let dateMatch = tag.match(/(\d{4})-(\d{2})-(\d{2})/)
@@ -453,15 +486,17 @@ export class OrderProcessor {
  * @param order The raw Shopify order.
  * @param globalMappings The global field mappings.
  * @param extractMappings The extract processing mappings.
+ * @param filterCriteria Optional filter criteria to prioritize matching dates.
  * @returns An array of processed line items.
  */
 export function processShopifyOrder(
   order: ShopifyOrder,
   globalMappings: GlobalFieldMapping[],
   extractMappings: any[],
+  filterCriteria?: { deliveryDate?: string, processingDate?: string },
   manuallyEditedFields?: Record<string, boolean>
 ): Record<string, string>[] {
-  const processor = new OrderProcessor(order, extractMappings)
+  const processor = new OrderProcessor(order, extractMappings, filterCriteria)
   const result: Record<string, string>[] = []
 
   // Process extract processing fields first (order-level)
