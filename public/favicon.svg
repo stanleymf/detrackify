@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Background circle -->
+  <circle cx="16" cy="16" r="15" fill="#3b82f6" stroke="#1d4ed8" stroke-width="1"/>
+  
+  <!-- Delivery truck body -->
+  <rect x="6" y="18" width="16" height="8" rx="1" fill="#ffffff"/>
+  
+  <!-- Truck cabin -->
+  <rect x="18" y="16" width="6" height="10" rx="1" fill="#ffffff"/>
+  
+  <!-- Truck wheels -->
+  <circle cx="10" cy="26" r="2" fill="#1f2937"/>
+  <circle cx="22" cy="26" r="2" fill="#1f2937"/>
+  
+  <!-- Package/box in truck -->
+  <rect x="8" y="20" width="4" height="4" fill="#10b981" stroke="#047857" stroke-width="0.5"/>
+  
+  <!-- Tracking lines -->
+  <path d="M 4 12 L 28 12" stroke="#ffffff" stroke-width="1" stroke-dasharray="2,2"/>
+  <path d="M 4 14 L 28 14" stroke="#ffffff" stroke-width="1" stroke-dasharray="2,2"/>
+  
+  <!-- D for Detrackify -->
+  <text x="16" y="8" font-family="Arial, sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#ffffff">D</text>
+</svg> 

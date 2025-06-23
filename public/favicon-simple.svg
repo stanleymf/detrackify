@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#3b82f6"/>
+  
+  <!-- Truck body -->
+  <rect x="4" y="20" width="20" height="8" rx="2" fill="#ffffff"/>
+  
+  <!-- Truck cabin -->
+  <rect x="20" y="18" width="6" height="10" rx="2" fill="#ffffff"/>
+  
+  <!-- Wheels -->
+  <circle cx="10" cy="28" r="2" fill="#1f2937"/>
+  <circle cx="24" cy="28" r="2" fill="#1f2937"/>
+  
+  <!-- Package -->
+  <rect x="6" y="22" width="6" height="4" fill="#10b981"/>
+  
+  <!-- D letter -->
+  <text x="16" y="12" font-family="Arial, sans-serif" font-size="8" font-weight="bold" text-anchor="middle" fill="#ffffff">D</text>
+</svg> 
