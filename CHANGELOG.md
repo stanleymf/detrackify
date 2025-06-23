@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0] - 22/06/2025
+
+### Added
+- Automatic prioritization of today's date when extracting dates from order tags
+- Today's date is now the second priority after filter criteria in date extraction
+- Enhanced console logging to track date extraction priority (filter → today → fallback)
+- Improved date processing for orders with multiple date tags
+
+### Changed
+- Updated date extraction logic to automatically prioritize today's date
+- Enhanced order processing to work with today's date prioritization
+- Maintained compatibility with existing filter-based prioritization
+
 ## [0.17.1] - 22/06/2025
 
 ### Fixed
