@@ -58,10 +58,37 @@ export class OrderProcessor {
     const tags = (this.order.tags || '').split(',').map(t => t.trim())
     
     if (processingType === 'date') {
-      // Look for date patterns in tags
-      for (const tag of tags) {
-        if (format === 'dd/mm/yyyy') {
-          // Look for DD/MM/YYYY pattern
+      // If we have filter criteria, prioritize matching dates
+      if (this.filterCriteria) {
+        // Check for filter dates first (prioritize matching dates)
+        const filterDates = []
+        if (this.filterCriteria.deliveryDate) {
+          filterDates.push({ type: 'delivery', date: this.filterCriteria.deliveryDate })
+        }
+        if (this.filterCriteria.processingDate) {
+          filterDates.push({ type: 'processing', date: this.filterCriteria.processingDate })
+        }
+        
+        // First, look for any tag that contains a filter date
+        for (const filterInfo of filterDates) {
+          for (const tag of tags) {
+            if (tag.includes(filterInfo.date)) {
+              if (format === 'dd/mm/yyyy') {
+                const dateMatch = tag.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+                if (dateMatch) {
+                  console.log(`Found matching ${filterInfo.type} date: ${dateMatch[0]} (filter: ${filterInfo.date})`)
+                  return dateMatch[0]
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Fall back to existing logic if no filter match found
+      if (format === 'dd/mm/yyyy') {
+        // Look for DD/MM/YYYY pattern
+        for (const tag of tags) {
           const dateMatch = tag.match(/(\d{2})\/(\d{2})\/(\d{4})/)
           if (dateMatch) {
             return dateMatch[0]
