@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.1] - 22/06/2025
+
+### Fixed
+- Corrected date filtering logic in `extractFromTags` method to work with actual processing flow
+- Fixed date prioritization to properly extract dates that match filter criteria
+- Added console logging to track when matching dates are found
+- Simplified filter logic to look for any tag containing filter dates
+
 ## [0.17.0] - 22/06/2025
 
 ### Added
