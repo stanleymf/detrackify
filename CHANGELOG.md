@@ -2,16 +2,215 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.16.0] - 2025-06-22
+## [0.17.0] - 22/06/2025
 
 ### Added
-- **Order Dashboard Search**: Added a search bar to the Order Dashboard to filter orders by any field.
-- **Default AND Filter**: Changed the default tag filter mode to "AND" for fetching orders from Shopify.
+- Enhanced order processing to prioritize matching dates when filtering by delivery/processing dates
+- Order processor now accepts filter criteria to ensure extracted dates match filter input
+- Frontend automatically extracts date information from tag filters for better date matching
+- Backend API passes filter criteria to order processing for improved accuracy
 
-## [0.15.0] - 2025-06-21
+### Changed
+- Modified `extractDateFromTags` method to prioritize dates that match filter criteria
+- Updated order processing flow to handle filter criteria parameter
+- Enhanced tag filtering to include date-specific criteria
+
+## [0.16.0] - 22/06/2025
 
 ### Added
-- **New Time Window Mapping**: Added support for "11:00-15:00" time window in extract processing mappings
+- Search bar functionality to filter orders on the dashboard
+- Real-time search filtering for order names, descriptions, and other fields
+
+### Changed
+- Changed default tag filter mode from "OR" to "AND" for more precise filtering
+- Improved order filtering logic for better accuracy
+
+## [0.15.0] - 21/06/2025
+
+### Added
+- Manual order creation functionality
+- Bulk product management features
+- Enhanced product synchronization
+- Driver information management
+- Tag and title filtering systems
+
+### Changed
+- Improved order processing and export logic
+- Enhanced UI/UX for better user experience
+- Updated field mapping system
+
+## [0.14.0] - 20/06/2025
+
+### Added
+- Extract processing mappings for advanced field extraction
+- Enhanced order processing with multiple line item support
+- Improved date and time extraction from order tags
+- Better error handling and logging
+
+### Changed
+- Refactored order processor for better maintainability
+- Updated field mapping system to support complex extractions
+- Enhanced tag-based filtering and processing
+
+## [0.13.0] - 19/06/2025
+
+### Added
+- Advanced field mapping system
+- Global field mappings for consistent data processing
+- Enhanced order processing with better field extraction
+- Improved error handling and validation
+
+### Changed
+- Refactored order processing logic
+- Updated database schema for better field mapping support
+- Enhanced UI for field mapping configuration
+
+## [0.12.0] - 18/06/2025
+
+### Added
+- Shopify webhook integration for real-time order updates
+- Enhanced order processing with better data extraction
+- Improved error handling and logging
+- Better UI/UX for order management
+
+### Changed
+- Updated order processing to handle webhook data
+- Enhanced database operations for better performance
+- Improved error reporting and user feedback
+
+## [0.11.0] - 17/06/2025
+
+### Added
+- Order editing functionality
+- Enhanced order processing with better field mapping
+- Improved error handling and validation
+- Better UI/UX for order management
+
+### Changed
+- Updated order processing logic
+- Enhanced database operations
+- Improved error reporting
+
+## [0.10.0] - 16/06/2025
+
+### Added
+- Order deletion functionality
+- Enhanced order processing
+- Improved error handling
+- Better UI/UX
+
+### Changed
+- Updated order management system
+- Enhanced database operations
+- Improved error reporting
+
+## [0.9.0] - 15/06/2025
+
+### Added
+- Order reprocessing functionality
+- Enhanced order processing with better field extraction
+- Improved error handling and validation
+- Better UI/UX for order management
+
+### Changed
+- Updated order processing logic
+- Enhanced database operations
+- Improved error reporting
+
+## [0.8.0] - 14/06/2025
+
+### Added
+- Enhanced order processing with better field mapping
+- Improved error handling and validation
+- Better UI/UX for order management
+
+### Changed
+- Updated order processing logic
+- Enhanced database operations
+- Improved error reporting
+
+## [0.7.0] - 13/06/2025
+
+### Added
+- Order processing with field mapping
+- Enhanced error handling
+- Better UI/UX
+
+### Changed
+- Updated order processing logic
+- Enhanced database operations
+- Improved error reporting
+
+## [0.6.0] - 12/06/2025
+
+### Added
+- Basic order processing
+- Enhanced error handling
+- Better UI/UX
+
+### Changed
+- Updated order processing logic
+- Enhanced database operations
+- Improved error reporting
+
+## [0.5.0] - 11/06/2025
+
+### Added
+- Order management system
+- Enhanced error handling
+- Better UI/UX
+
+### Changed
+- Updated order processing logic
+- Enhanced database operations
+- Improved error reporting
+
+## [0.4.0] - 10/06/2025
+
+### Added
+- Store management system
+- Enhanced error handling
+- Better UI/UX
+
+### Changed
+- Updated store processing logic
+- Enhanced database operations
+- Improved error reporting
+
+## [0.3.0] - 09/06/2025
+
+### Added
+- Authentication system
+- Enhanced error handling
+- Better UI/UX
+
+### Changed
+- Updated authentication logic
+- Enhanced database operations
+- Improved error reporting
+
+## [0.2.0] - 08/06/2025
+
+### Added
+- Basic database operations
+- Enhanced error handling
+- Better UI/UX
+
+### Changed
+- Updated database logic
+- Enhanced error handling
+- Improved error reporting
+
+## [0.1.0] - 07/06/2025
+
+### Added
+- Initial project setup
+- Basic UI components
+- Database schema
+- Authentication system
+
+### Changed
+- Initial release
 
 ## [0.13.13] - 2025-06-21
 
