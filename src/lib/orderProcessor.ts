@@ -58,9 +58,13 @@ export class OrderProcessor {
     const tags = (this.order.tags || '').split(',').map(t => t.trim())
     
     if (processingType === 'date') {
+      // Get today's date in dd/mm/yyyy format for comparison
+      const today = new Date()
+      const todayFormatted = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`
+      
       // If we have filter criteria, prioritize matching dates
       if (this.filterCriteria) {
-        // Check for filter dates first (prioritize matching dates)
+        // Check for filter dates first (highest priority)
         const filterDates = []
         if (this.filterCriteria.deliveryDate) {
           filterDates.push({ type: 'delivery', date: this.filterCriteria.deliveryDate })
@@ -85,12 +89,26 @@ export class OrderProcessor {
         }
       }
       
-      // Fall back to existing logic if no filter match found
+      // Second priority: look for today's date
+      for (const tag of tags) {
+        if (tag.includes(todayFormatted)) {
+          if (format === 'dd/mm/yyyy') {
+            const dateMatch = tag.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+            if (dateMatch) {
+              console.log(`Found today's date: ${dateMatch[0]} (today: ${todayFormatted})`)
+              return dateMatch[0]
+            }
+          }
+        }
+      }
+      
+      // Fall back to existing logic if no filter match or today's date found
       if (format === 'dd/mm/yyyy') {
         // Look for DD/MM/YYYY pattern
         for (const tag of tags) {
           const dateMatch = tag.match(/(\d{2})\/(\d{2})\/(\d{4})/)
           if (dateMatch) {
+            console.log(`Found fallback date: ${dateMatch[0]}`)
             return dateMatch[0]
           }
         }
