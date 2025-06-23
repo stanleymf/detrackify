@@ -300,33 +300,25 @@ export class OrderProcessor {
     const startHour = parseInt(match[1], 10)
     const startMinute = parseInt(match[2], 10)
     
-    // Apply conversions according to requirements
-    let releaseHour: number
-    let releaseMinute: number
+    // Convert start time to minutes for easier comparison
+    const startTimeInMinutes = startHour * 60 + startMinute
     
-    if (startHour === 10 && startMinute === 0) {
-      // 10:00-14:00 → 08:45
-      releaseHour = 8
-      releaseMinute = 45
-    } else if (startHour === 11 && startMinute === 0) {
-      // 11:00-15:00 → 08:45
-      releaseHour = 8
-      releaseMinute = 45
-    } else if (startHour === 14 && startMinute === 0) {
-      // 14:00-18:00 → 13:45
-      releaseHour = 13
-      releaseMinute = 45
-    } else if (startHour === 18 && startMinute === 0) {
-      // 18:00-22:00 → 17:15
-      releaseHour = 17
-      releaseMinute = 15
-    } else {
-      // Default: return original time window
-      return timeWindow
+    // Apply range-based conversions
+    // Morning Range: 10:00-14:00 (600-840 minutes) → 08:45
+    if (startTimeInMinutes >= 600 && startTimeInMinutes < 840) {
+      return '08:45'
+    }
+    // Afternoon Range: 14:00-18:00 (840-1080 minutes) → 13:45
+    else if (startTimeInMinutes >= 840 && startTimeInMinutes < 1080) {
+      return '13:45'
+    }
+    // Evening Range: 18:00-22:00 (1080-1320 minutes) → 17:15
+    else if (startTimeInMinutes >= 1080 && startTimeInMinutes < 1320) {
+      return '17:15'
     }
     
-    const result = `${releaseHour.toString().padStart(2, '0')}:${releaseMinute.toString().padStart(2, '0')}`
-    return result
+    // If no range matches, return original time window
+    return timeWindow
   }
 
   /**
@@ -342,27 +334,25 @@ export class OrderProcessor {
     const startHour = parseInt(match[1], 10)
     const startMinute = parseInt(match[2], 10)
     
-    // Apply conversions according to requirements
-    let result: string
+    // Convert start time to minutes for easier comparison
+    const startTimeInMinutes = startHour * 60 + startMinute
     
-    if (startHour === 10 && startMinute === 0) {
-      // 10:00-14:00 → Morning
-      result = 'Morning'
-    } else if (startHour === 11 && startMinute === 0) {
-      // 11:00-15:00 → Morning
-      result = 'Morning'
-    } else if (startHour === 14 && startMinute === 0) {
-      // 14:00-18:00 → Afternoon
-      result = 'Afternoon'
-    } else if (startHour === 18 && startMinute === 0) {
-      // 18:00-22:00 → Night
-      result = 'Night'
-    } else {
-      // Default: return original time window
-      return timeWindow
+    // Apply range-based conversions
+    // Morning Range: 10:00-14:00 (600-840 minutes) → Morning
+    if (startTimeInMinutes >= 600 && startTimeInMinutes < 840) {
+      return 'Morning'
+    }
+    // Afternoon Range: 14:00-18:00 (840-1080 minutes) → Afternoon
+    else if (startTimeInMinutes >= 840 && startTimeInMinutes < 1080) {
+      return 'Afternoon'
+    }
+    // Evening Range: 18:00-22:00 (1080-1320 minutes) → Night
+    else if (startTimeInMinutes >= 1080 && startTimeInMinutes < 1320) {
+      return 'Night'
     }
     
-    return result
+    // If no range matches, return original time window
+    return timeWindow
   }
 
   /**
