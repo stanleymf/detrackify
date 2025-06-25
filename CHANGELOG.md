@@ -2,6 +2,78 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.1] - 22/06/2025
+
+### Fixed
+- **Detrack Export Company Name Field** - Fixed missing company name field in Detrack export payload
+- Added proper mapping of companyName field to Detrack API company_name field
+- Company information now correctly exports to Detrack delivery jobs
+
+## [0.21.0] - 22/06/2025
+
+### Fixed
+- **Manual Orders Dashboard Column Resizing** - Fixed horizontal column resizing functionality
+- **Manual Orders Dashboard Column Visibility** - Added dropdown menu to hide/unhide field columns
+- **Manual Orders Dashboard Transfer Functionality** - Fixed transfer to main dashboard button
+- **Manual Orders Dashboard UI** - Cleaned up and matched main dashboard styling
+
+### Changed
+- Updated Manual Orders Dashboard to use proper resize handlers with useCallback
+- Improved column visibility controls with dropdown menu matching main dashboard
+- Enhanced table structure to use flexbox layout like main dashboard
+- Updated cell rendering to match main dashboard styling and behavior
+- Improved mobile card view with orange color scheme for manual orders
+- Fixed status badge styling to match main dashboard
+
+### Technical
+- Implemented proper resize event handling with cleanup
+- Added column visibility state management
+- Fixed transfer functionality with proper localStorage operations
+- Updated table structure to use CSS Grid/Flexbox instead of HTML table
+- Enhanced mobile responsiveness and styling consistency
+
+## [0.20.0] - 22/06/2025
+
+### Added
+- **Manual Orders Dashboard** - Separate dashboard for managing manually created orders
+- Independent storage system for manual orders (separate from Shopify orders)
+- Transfer functionality to move manual orders to main dashboard
+- Manual orders are not affected by "Clear All Orders" or "Export to Detrack" operations
+- Dedicated navigation tab for Manual Orders Dashboard
+- Manual orders have their own column configuration and filtering
+- Transfer confirmation dialog with order count display
+- Manual orders maintain their own stats and filtering options
+
+### Changed
+- Updated AddOrder component to save orders to manual orders storage
+- Enhanced navigation to include Manual Orders tab with orange color scheme
+- Manual orders are now completely separate from Shopify orders workflow
+- Stat cards on main dashboard remain unchanged and only read from Shopify orders
+
+### Technical
+- Created new ManualOrdersDashboard component with full functionality
+- Implemented separate localStorage keys for manual orders and configuration
+- Added transfer mechanism between manual and main order storage
+- Updated routing to include /manual-orders path
+
+## [0.19.0] - 22/06/2025
+
+### Added
+- **Auto-Clear Feature with Time Delay** - Automatically clear all orders from the dashboard after successful export to Detrack
+- Configurable time delay (1-1440 minutes, default 30 minutes) before clearing orders
+- Settings page with auto-clear configuration options
+- Enable/disable auto-clear functionality
+- Optional confirmation dialog before clearing orders
+- Immediate clear option during export process
+- Enhanced user experience with clear feedback on export and clear operations
+
+### Changed
+- Modified export to Detrack workflow to include configurable auto-clear functionality
+- Added auto-clear settings to the Settings page
+- Improved success messaging to include auto-clear status
+- Enhanced error handling for clear operations with fallback messaging
+- Updated storage system to support auto-clear settings persistence
+
 ## [0.18.0] - 22/06/2025
 
 ### Added

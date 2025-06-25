@@ -110,6 +110,14 @@ export interface AppSettings {
   dashboardConfig?: {
     columnConfigs: DashboardColumnConfig[]
   }
+  autoClearSettings?: AutoClearSettings
+}
+
+// Auto-clear settings for export to Detrack
+export interface AutoClearSettings {
+  enabled: boolean
+  delayMinutes: number
+  showConfirmation: boolean
 }
 
 // A more robust definition for extract processing fields

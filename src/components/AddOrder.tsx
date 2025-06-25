@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { Plus, Loader2 } from "lucide-react"
 import { useIsMobile } from "@/components/hooks/use-mobile"
+import { type Order } from "@/types"
 
 interface ManualOrderData {
   deliveryOrderNo: string
@@ -88,28 +89,49 @@ export function AddOrder({
     setSubmitResult(null)
 
     try {
+      // Create a new order with a unique ID
+      const newOrder: Order = {
+        id: crypto.randomUUID(),
+        ...orderData,
+        trackingNo: "",
+        deliverySequence: "",
+        postalCode: "",
+        assignTo: "",
+        zone: "",
+        accountNo: "",
+        deliveryJobOwner: "",
+        attachmentUrl: "",
+        status: "Ready for Export",
+        podAt: "",
+        remarks: "",
+        serviceTime: "",
+        sku: ""
+      }
+
+      // POST to backend for true persistence
       const response = await fetch('/api/orders/manual', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(orderData),
-        credentials: 'include'
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newOrder),
+        credentials: 'include',
       })
-
       const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to save manual order to backend')
+      }
 
-      if (response.ok && result.success) {
-        setSubmitResult('Order created successfully!')
-        setOrderData(initialOrderData) // Reset form
-        if (onOrderCreated) {
-          onOrderCreated()
-        }
-      } else {
-        setSubmitResult(`Error: ${result.error || 'Failed to create order'}`)
+      // Save to manual orders storage for UI speed
+      const manualOrders = JSON.parse(localStorage.getItem("manual-orders") || "[]")
+      manualOrders.push(newOrder)
+      localStorage.setItem("manual-orders", JSON.stringify(manualOrders))
+
+      setSubmitResult('Manual order created successfully!')
+      setOrderData(initialOrderData) // Reset form
+      if (onOrderCreated) {
+        onOrderCreated()
       }
     } catch (error) {
-      console.error('Error creating order:', error)
+      console.error('Error creating manual order:', error)
       setSubmitResult(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsSubmitting(false)

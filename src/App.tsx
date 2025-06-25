@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { Layout } from "@/components/Layout"
 import { Dashboard } from "@/components/Dashboard"
+import { ManualOrdersDashboard } from "@/components/ManualOrdersDashboard"
 import { Settings } from "@/components/Settings"
 import { Login } from "@/components/Login"
 import { initializeMockData } from "@/lib/mockData"
@@ -17,6 +18,7 @@ function NavigationTabs() {
   // Map path to tab value
   const pathToTab: Record<string, string> = {
     "/dashboard": "dashboard",
+    "/manual-orders": "manual-orders",
     "/analytics": "analytics",
     "/info": "info",
     "/settings": "settings"
@@ -48,6 +50,23 @@ function NavigationTabs() {
             aria-label="Dashboard - View orders and main overview"
           >
             {isMobile ? '📊' : 'Dashboard'}
+          </NavLink>
+          <NavLink 
+            to="/manual-orders" 
+            className={({ isActive }) =>
+              `flex-1 md:flex-none px-3 md:px-6 py-2.5 md:py-2 
+               rounded-full transition-all duration-200 text-sm md:text-base font-medium
+               text-center whitespace-nowrap
+               ${isActive ?
+                 'bg-olive-600 text-white font-bold shadow-lg transform scale-105' :
+                 'text-olive-700 hover:bg-olive-100 hover:text-olive-900 active:scale-95'
+               }
+               ${isMobile ? 'min-w-0 flex-shrink-0' : ''}
+              `
+            }
+            aria-label="Manual Orders - Manage manually created orders"
+          >
+            {isMobile ? '✏️' : 'Manual Orders'}
           </NavLink>
           <NavLink 
             to="/analytics" 
@@ -110,6 +129,7 @@ function AppRoutes({ viewMode, setViewMode }: { viewMode: 'auto' | 'mobile' | 'd
   return (
     <Routes>
       <Route path="/dashboard" element={<Dashboard viewMode={viewMode} />} />
+      <Route path="/manual-orders" element={<ManualOrdersDashboard viewMode={viewMode} />} />
       <Route path="/settings" element={<Settings viewMode={viewMode} onViewModeChange={setViewMode} />} />
       <Route path="/analytics" element={<Analytics viewMode={viewMode} onViewModeChange={setViewMode} />} />
       <Route path="/info" element={<Info viewMode={viewMode} />} />

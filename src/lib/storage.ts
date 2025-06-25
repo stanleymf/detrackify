@@ -1,7 +1,8 @@
-import type { Order, AppSettings, ShopifyStore, GlobalFieldMapping, DashboardColumnConfig } from "@/types"
+import type { Order, AppSettings, ShopifyStore, GlobalFieldMapping, DashboardColumnConfig, AutoClearSettings } from "@/types"
 
 const ORDERS_KEY = "shopify-orders"
 const SETTINGS_KEY = "app-settings"
+const AUTO_CLEAR_SETTINGS_KEY = "auto-clear-settings"
 
 // Migration function to handle old data format
 const migrateSettings = (stored: any): AppSettings => {
@@ -122,5 +123,24 @@ export const storage = {
 
   updateDashboardConfig: (columnConfigs: DashboardColumnConfig[]): void => {
     storage.saveDashboardConfig(columnConfigs)
+  },
+
+  // Auto-clear settings
+  getAutoClearSettings: (): AutoClearSettings => {
+    const stored = localStorage.getItem(AUTO_CLEAR_SETTINGS_KEY)
+    if (!stored) {
+      const defaultSettings: AutoClearSettings = {
+        enabled: false,
+        delayMinutes: 30,
+        showConfirmation: true
+      }
+      localStorage.setItem(AUTO_CLEAR_SETTINGS_KEY, JSON.stringify(defaultSettings))
+      return defaultSettings
+    }
+    return JSON.parse(stored)
+  },
+
+  saveAutoClearSettings: (settings: AutoClearSettings): void => {
+    localStorage.setItem(AUTO_CLEAR_SETTINGS_KEY, JSON.stringify(settings))
   },
 }

@@ -30,6 +30,8 @@ import { storage } from "@/lib/storage"
 import { useIsMobile } from "@/components/hooks/use-mobile"
 import { AddOrder } from "@/components/AddOrder"
 
+const AUTO_CLEAR_SCHEDULED_TIME_KEY = "auto-clear-scheduled-time"
+
 export function Dashboard({ 
   viewMode = 'auto', 
   onViewModeChange 
@@ -57,6 +59,8 @@ export function Dashboard({
   const [productLabels, setProductLabels] = useState<any[]>([])
   const [savedProducts, setSavedProducts] = useState<any[]>([])
   const [addOrderModalOpen, setAddOrderModalOpen] = useState(false)
+  const [autoClearTimeoutId, setAutoClearTimeoutId] = useState<number | null>(null)
+  const [pendingAutoClear, setPendingAutoClear] = useState(false)
 
   const isMobile = useIsMobile()
   const actualViewMode = viewMode === 'auto' ? (isMobile ? 'mobile' : 'desktop') : viewMode
@@ -150,6 +154,60 @@ export function Dashboard({
     
     loadSavedProducts()
   }, [])
+
+  // Helper to clear scheduled time from localStorage
+  const clearScheduledAutoClear = () => {
+    localStorage.removeItem(AUTO_CLEAR_SCHEDULED_TIME_KEY)
+    setPendingAutoClear(false)
+  }
+
+  // On mount, check for scheduled auto-clear
+  useEffect(() => {
+    const scheduled = localStorage.getItem(AUTO_CLEAR_SCHEDULED_TIME_KEY)
+    if (scheduled) {
+      const scheduledTime = parseInt(scheduled, 10)
+      const now = Date.now()
+      if (scheduledTime > now) {
+        // Set timer for remaining time
+        const delay = scheduledTime - now
+        setPendingAutoClear(true)
+        const timeoutId = setTimeout(() => {
+          setPendingAutoClear(false)
+          handleAutoClear()
+        }, delay)
+        setAutoClearTimeoutId(timeoutId)
+      } else {
+        // Time has passed, trigger auto-clear now
+        setPendingAutoClear(true)
+        handleAutoClear()
+      }
+    }
+    // Cleanup on unmount
+    return () => {
+      if (autoClearTimeoutId) clearTimeout(autoClearTimeoutId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Main auto-clear handler (called after delay)
+  const handleAutoClear = async () => {
+    const autoClearSettings = storage.getAutoClearSettings()
+    if (autoClearSettings.showConfirmation) {
+      const confirmClear = window.confirm(
+        `Auto-clear: Ready to clear all orders from dashboard?`
+      )
+      if (confirmClear) {
+        await clearAllOrders()
+        clearScheduledAutoClear()
+      } else {
+        // User cancelled, but we still clear the scheduled time
+        clearScheduledAutoClear()
+      }
+    } else {
+      await clearAllOrders()
+      clearScheduledAutoClear()
+    }
+  }
 
   // Filter orders based on date and timeslot
   const filteredOrders = Array.isArray(orders) ? orders.filter((order) => {
@@ -306,11 +364,33 @@ export function Dashboard({
       if (result.success) {
         // Show success message with summary
         const summary = result.summary
-        alert(`Export completed!\n\nTotal: ${summary.total}\nSuccess: ${summary.success}\nErrors: ${summary.errors}`)
+        const successMessage = `Export completed!\n\nTotal: ${summary.total}\nSuccess: ${summary.success}\nErrors: ${summary.errors}`
         
-        // Refresh orders to show updated statuses
-        await loadOrdersFromDatabase()
-        setSelectedOrders(new Set())
+        // Get auto-clear settings
+        const autoClearSettings = storage.getAutoClearSettings()
+        
+        if (autoClearSettings.enabled) {
+          const delayMinutes = autoClearSettings.delayMinutes
+          // Schedule auto-clear
+          const scheduledTime = Date.now() + delayMinutes * 60 * 1000
+          localStorage.setItem(AUTO_CLEAR_SCHEDULED_TIME_KEY, scheduledTime.toString())
+          setPendingAutoClear(true)
+          if (autoClearTimeoutId) clearTimeout(autoClearTimeoutId)
+          const timeoutId = setTimeout(() => {
+            setPendingAutoClear(false)
+            handleAutoClear()
+          }, delayMinutes * 60 * 1000)
+          setAutoClearTimeoutId(timeoutId)
+          // Show info message only (no dialog yet)
+          setFetchResult(
+            `${successMessage}\n\nAuto-clear is enabled. Orders will be cleared in ${delayMinutes} minutes.`
+          )
+        } else {
+          // Just refresh orders to show updated statuses
+          await loadOrdersFromDatabase()
+          setSelectedOrders(new Set())
+          setFetchResult(`Export completed successfully! Total: ${summary.total}, Success: ${summary.success}, Errors: ${summary.errors}`)
+        }
       } else {
         throw new Error('Export failed')
       }
@@ -318,6 +398,36 @@ export function Dashboard({
     } catch (error) {
       console.error('Error exporting to Detrack:', error)
       alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  const clearAllOrders = async () => {
+    try {
+      // Clear all orders from database
+      const clearResponse = await fetch('/api/orders/clear-all', { 
+        method: 'DELETE', 
+        credentials: 'include' 
+      })
+      
+      if (!clearResponse.ok) {
+        const errorText = await clearResponse.text()
+        console.error('Clear all error response:', errorText)
+        throw new Error(`HTTP ${clearResponse.status}: ${clearResponse.statusText}`)
+      }
+      
+      const clearResult = await clearResponse.json()
+      
+      // Refresh orders from database, reset to page 1
+      await loadOrdersFromDatabase(1, pageSize)
+      
+      // Clear selection
+      setSelectedOrders(new Set())
+      
+      // Show success message
+      setFetchResult(`Orders cleared successfully! Removed ${clearResult.deletedCount || 0} orders from dashboard.`)
+    } catch (clearError: any) {
+      console.error('Error clearing orders:', clearError)
+      setFetchResult(`Failed to clear orders: ${clearError.message}`)
     }
   }
 

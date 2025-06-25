@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Trash2, Plus, X, Info, Save, Truck } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Trash2, Plus, X, Info, Save, Truck, Clock } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ import {
   type ShopifyStore,
   type GlobalFieldMapping,
   type AppSettings,
+  type AutoClearSettings,
   DASHBOARD_FIELD_LABELS,
   SHOPIFY_FIELDS,
   EXTRACT_PROCESSING_FIELDS,
@@ -57,6 +59,13 @@ export function Settings({
     isEnabled: false
   })
 
+  // Auto-clear settings state
+  const [autoClearSettings, setAutoClearSettings] = useState<AutoClearSettings>({
+    enabled: false,
+    delayMinutes: 30,
+    showConfirmation: true
+  })
+
   useEffect(() => {
     const loadedSettings = storage.getSettings()
     // Ensure we have the correct structure
@@ -66,6 +75,12 @@ export function Settings({
       extractProcessingMappings: loadedSettings.extractProcessingMappings || []
     }
     setSettings(safeSettings)
+
+    // Load auto-clear settings
+    const loadedAutoClearSettings = storage.getAutoClearSettings()
+    if (loadedAutoClearSettings) {
+      setAutoClearSettings(loadedAutoClearSettings)
+    }
 
     // Load stores from database
     loadStoresFromDatabase()
@@ -421,6 +436,12 @@ export function Settings({
     return EXTRACT_PROCESSING_FIELDS.includes(field as any)
   }
 
+  const saveAutoClearSettings = () => {
+    storage.saveAutoClearSettings(autoClearSettings)
+    setSaveStatus("success")
+    setTimeout(() => setSaveStatus("idle"), 3000)
+  }
+
   return (
     <div className="space-y-6">
       {/* Shopify Stores Section */}
@@ -723,6 +744,112 @@ export function Settings({
                     <li>• Only essential delivery information is sent (address, phone, recipient name, etc.)</li>
                     <li>• Phone numbers are automatically normalized (removes country codes)</li>
                     <li>• Test the connection before exporting orders to ensure proper setup</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Auto-Clear Settings Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle className="text-olive-600">Auto-Clear Settings</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Configure automatic clearing of orders from the dashboard after successful export to Detrack.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {saveStatus === "success" && (
+                <Badge className="bg-success text-success-foreground">Saved!</Badge>
+              )}
+              {saveStatus === "error" && (
+                <Badge className="bg-error text-error-foreground">Save Failed</Badge>
+              )}
+              <Button
+                onClick={saveAutoClearSettings}
+                className="bg-olive-600 hover:bg-olive-700 text-white"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save Settings
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {/* Enable Auto-Clear */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-base font-medium">Enable Auto-Clear</Label>
+                <p className="text-sm text-muted-foreground">
+                  Automatically clear all orders from the dashboard after successful export to Detrack
+                </p>
+              </div>
+              <Switch
+                checked={autoClearSettings.enabled}
+                onCheckedChange={(checked) =>
+                  setAutoClearSettings(prev => ({ ...prev, enabled: checked }))
+                }
+              />
+            </div>
+
+            {/* Delay Settings */}
+            <div className="space-y-3">
+              <Label className="text-base font-medium">Clear Delay</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number"
+                  min="1"
+                  max="1440"
+                  value={autoClearSettings.delayMinutes}
+                  onChange={(e) =>
+                    setAutoClearSettings(prev => ({ 
+                      ...prev, 
+                      delayMinutes: Math.max(1, Math.min(1440, parseInt(e.target.value) || 30))
+                    }))
+                  }
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">minutes</span>
+                <Clock className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Orders will be automatically cleared {autoClearSettings.delayMinutes} minutes after successful export
+              </p>
+            </div>
+
+            {/* Confirmation Settings */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-base font-medium">Show Confirmation</Label>
+                <p className="text-sm text-muted-foreground">
+                  Show a confirmation dialog before clearing orders (recommended)
+                </p>
+              </div>
+              <Switch
+                checked={autoClearSettings.showConfirmation}
+                onCheckedChange={(checked) =>
+                  setAutoClearSettings(prev => ({ ...prev, showConfirmation: checked }))
+                }
+              />
+            </div>
+
+            {/* Information Panel */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-1">Auto-Clear Feature</p>
+                  <ul className="space-y-1 text-xs">
+                    <li>• Orders are automatically cleared from the dashboard after successful export</li>
+                    <li>• The delay gives you time to review the export before clearing</li>
+                    <li>• Confirmation dialog provides an additional safety check</li>
+                    <li>• Only affects the dashboard display - orders remain in Detrack</li>
+                    <li>• You can manually clear orders anytime using the "Clear All Orders" button</li>
                   </ul>
                 </div>
               </div>
