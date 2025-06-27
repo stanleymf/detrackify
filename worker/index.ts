@@ -1193,35 +1193,76 @@ async function handleUpdateOrder(orderId: string, request: Request, db: Database
 
 async function handleCreateManualOrder(request: Request, db: DatabaseService): Promise<Response> {
 	try {
-		const orderData = await request.json()
+		const requestData = await request.json()
 		
-		// Process manual order with minimal transformations
-		const processedData = processManualOrder(orderData)
-		
-		// Generate a unique manual order ID
-		const manualOrderId = generateManualOrderId()
-		const orderName = orderData.deliveryOrderNo || `MANUAL-${manualOrderId}`
-		
-		// Create order directly in database
-		await db.createOrder({
-			store_id: 'manual', // Special store ID for manual orders
-			shopify_order_id: manualOrderId,
-			shopify_order_name: orderName,
-			status: 'Ready for Export',
-			processed_data: JSON.stringify([processedData]), // Single line item
-			raw_shopify_data: JSON.stringify(orderData), // Store original input
-			manually_edited_fields: null,
-			exported_at: null
-		})
-		
-		return new Response(JSON.stringify({ 
-			success: true, 
-			message: 'Manual order created successfully',
-			orderId: manualOrderId
-		}), {
-			status: 200,
-			headers: { 'Content-Type': 'application/json' }
-		})
+		// Handle both single orders and multi-item orders
+		if (requestData.orders && requestData.baseOrderId) {
+			// New multi-item format from frontend
+			const { orders, baseOrderId } = requestData
+			
+			// Create multiple line item rows in a single database order
+			const processedDataArray: any[] = []
+			
+			for (const order of orders) {
+				const processedData = processManualOrder(order)
+				processedDataArray.push(processedData)
+			}
+			
+			// Generate a unique manual order ID
+			const manualOrderId = generateManualOrderId()
+			const orderName = orders[0].deliveryOrderNo || `MANUAL-${manualOrderId}`
+			
+			// Create order in database with all line items
+			await db.createOrder({
+				store_id: 'manual', // Special store ID for manual orders
+				shopify_order_id: manualOrderId,
+				shopify_order_name: orderName,
+				status: 'Ready for Export',
+				processed_data: JSON.stringify(processedDataArray), // Multiple line items
+				raw_shopify_data: JSON.stringify(requestData), // Store original input
+				manually_edited_fields: null,
+				exported_at: null
+			})
+			
+			console.log(`Created manual order ${orderName} with ${orders.length} line items`)
+			
+			return new Response(JSON.stringify({ 
+				success: true, 
+				message: `Manual order created successfully with ${orders.length} items`,
+				orderId: manualOrderId
+			}), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		} else {
+			// Legacy single order format (backward compatibility)
+			const processedData = processManualOrder(requestData)
+			
+			// Generate a unique manual order ID
+			const manualOrderId = generateManualOrderId()
+			const orderName = requestData.deliveryOrderNo || `MANUAL-${manualOrderId}`
+			
+			// Create order directly in database
+			await db.createOrder({
+				store_id: 'manual', // Special store ID for manual orders
+				shopify_order_id: manualOrderId,
+				shopify_order_name: orderName,
+				status: 'Ready for Export',
+				processed_data: JSON.stringify([processedData]), // Single line item
+				raw_shopify_data: JSON.stringify(requestData), // Store original input
+				manually_edited_fields: null,
+				exported_at: null
+			})
+			
+			return new Response(JSON.stringify({ 
+				success: true, 
+				message: 'Manual order created successfully',
+				orderId: manualOrderId
+			}), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
 	} catch (error) {
 		console.error('[handleCreateManualOrder] Error creating manual order:', error)
 		return new Response(JSON.stringify({ 

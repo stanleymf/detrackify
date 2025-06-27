@@ -11,9 +11,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, Trash2 } from "lucide-react"
 import { useIsMobile } from "@/components/hooks/use-mobile"
 import { type Order } from "@/types"
+
+interface OrderItem {
+  sku: string
+  description: string
+  qty: number
+}
 
 interface ManualOrderData {
   deliveryOrderNo: string
@@ -33,9 +39,7 @@ interface ManualOrderData {
   senderNameOnApp: string
   group: string
   noOfShippingLabels: string
-  itemCount: string
-  description: string
-  qty: string
+  items: OrderItem[]
 }
 
 const initialOrderData: ManualOrderData = {
@@ -56,9 +60,7 @@ const initialOrderData: ManualOrderData = {
   senderNameOnApp: "",
   group: "",
   noOfShippingLabels: "",
-  itemCount: "",
-  description: "",
-  qty: ""
+  items: [{ sku: "", description: "", qty: 1 }] // Start with one item
 }
 
 export function AddOrder({ 
@@ -76,11 +78,40 @@ export function AddOrder({
   const isMobile = useIsMobile()
   const actualViewMode = viewMode === 'auto' ? (isMobile ? 'mobile' : 'desktop') : viewMode
 
-  const handleInputChange = (field: keyof ManualOrderData, value: string) => {
+  const handleInputChange = (field: keyof Omit<ManualOrderData, 'items'>, value: string) => {
     setOrderData(prev => ({
       ...prev,
       [field]: value
     }))
+  }
+
+  const handleItemChange = (index: number, field: keyof OrderItem, value: string | number) => {
+    setOrderData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      )
+    }))
+  }
+
+  const addItem = () => {
+    setOrderData(prev => ({
+      ...prev,
+      items: [...prev.items, { sku: "", description: "", qty: 1 }]
+    }))
+  }
+
+  const removeItem = (index: number) => {
+    if (orderData.items.length > 1) {
+      setOrderData(prev => ({
+        ...prev,
+        items: prev.items.filter((_, i) => i !== index)
+      }))
+    }
+  }
+
+  const getTotalQuantity = () => {
+    return orderData.items.reduce((total, item) => total + item.qty, 0)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,30 +120,64 @@ export function AddOrder({
     setSubmitResult(null)
 
     try {
-      // Create a new order with a unique ID
-      const newOrder: Order = {
-        id: crypto.randomUUID(),
-        ...orderData,
-        trackingNo: "",
-        deliverySequence: "",
-        postalCode: "",
-        assignTo: "",
-        zone: "",
-        accountNo: "",
-        deliveryJobOwner: "",
-        attachmentUrl: "",
-        status: "Ready for Export",
-        podAt: "",
-        remarks: "",
-        serviceTime: "",
-        sku: ""
+      // Create multiple orders (one per line item) to match the Shopify order structure
+      const baseOrderId = crypto.randomUUID()
+      const createdOrders: Order[] = []
+
+      for (let i = 0; i < orderData.items.length; i++) {
+        const item = orderData.items[i]
+        const lineItemId = `${baseOrderId}-${i}`
+        
+        const newOrder: Order = {
+          id: lineItemId,
+          deliveryOrderNo: orderData.deliveryOrderNo,
+          deliveryDate: orderData.deliveryDate,
+          processingDate: orderData.processingDate,
+          jobReleaseTime: orderData.jobReleaseTime,
+          deliveryCompletionTimeWindow: orderData.deliveryCompletionTimeWindow,
+          senderNumberOnApp: orderData.senderNumberOnApp,
+          address: orderData.address,
+          companyName: orderData.companyName,
+          firstName: orderData.firstName,
+          lastName: orderData.lastName,
+          recipientPhoneNo: orderData.recipientPhoneNo,
+          senderPhoneNo: orderData.senderPhoneNo,
+          instructions: orderData.instructions,
+          emailsForNotifications: orderData.emailsForNotifications,
+          senderNameOnApp: orderData.senderNameOnApp,
+          group: orderData.group,
+          noOfShippingLabels: orderData.noOfShippingLabels,
+          // Line item specific fields
+          sku: item.sku,
+          description: item.description,
+          qty: item.qty.toString(),
+          itemCount: getTotalQuantity().toString(),
+          // Default fields
+          trackingNo: "",
+          deliverySequence: "",
+          postalCode: "",
+          assignTo: "",
+          zone: "",
+          accountNo: "",
+          deliveryJobOwner: "",
+          attachmentUrl: "",
+          status: "Ready for Export",
+          podAt: "",
+          remarks: "",
+          serviceTime: ""
+        }
+
+        createdOrders.push(newOrder)
       }
 
       // POST to backend for true persistence
       const response = await fetch('/api/orders/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newOrder),
+        body: JSON.stringify({ 
+          orders: createdOrders,
+          baseOrderId: baseOrderId 
+        }),
         credentials: 'include',
       })
       const result = await response.json()
@@ -122,10 +187,10 @@ export function AddOrder({
 
       // Save to manual orders storage for UI speed
       const manualOrders = JSON.parse(localStorage.getItem("manual-orders") || "[]")
-      manualOrders.push(newOrder)
+      createdOrders.forEach(order => manualOrders.push(order))
       localStorage.setItem("manual-orders", JSON.stringify(manualOrders))
 
-      setSubmitResult('Manual order created successfully!')
+      setSubmitResult(`Manual order created successfully with ${createdOrders.length} items!`)
       setOrderData(initialOrderData) // Reset form
       if (onOrderCreated) {
         onOrderCreated()
@@ -154,7 +219,7 @@ export function AddOrder({
         <CardHeader>
           <CardTitle className="text-olive-600">Manual Order Entry</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Create a new order manually. This order will bypass Shopify mapping and be created directly.
+            Create a new order manually with multiple items. This order will bypass Shopify mapping and be created directly.
           </p>
         </CardHeader>
         <CardContent>
@@ -198,12 +263,12 @@ export function AddOrder({
                 <Label htmlFor="jobReleaseTime">Job Release Time</Label>
                 <Select value={orderData.jobReleaseTime} onValueChange={(value) => handleInputChange('jobReleaseTime', value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select time" />
+                    <SelectValue placeholder="Select release time" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="08:45">08:45</SelectItem>
-                    <SelectItem value="13:45">13:45</SelectItem>
-                    <SelectItem value="17:15">17:15</SelectItem>
+                    <SelectItem value="08:45">08:45 (Morning)</SelectItem>
+                    <SelectItem value="13:45">13:45 (Afternoon)</SelectItem>
+                    <SelectItem value="17:15">17:15 (Evening)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -215,29 +280,29 @@ export function AddOrder({
                     <SelectValue placeholder="Select time window" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Morning">Morning</SelectItem>
-                    <SelectItem value="Afternoon">Afternoon</SelectItem>
-                    <SelectItem value="Night">Night</SelectItem>
+                    <SelectItem value="Morning">Morning (10:00-14:00)</SelectItem>
+                    <SelectItem value="Afternoon">Afternoon (14:00-18:00)</SelectItem>
+                    <SelectItem value="Night">Night (18:00-22:00)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="senderNumberOnApp">Sender's Number to Appear on App</Label>
+                <Label htmlFor="senderNumberOnApp">Sender Number on App</Label>
                 <Input
                   id="senderNumberOnApp"
                   value={orderData.senderNumberOnApp}
                   onChange={(e) => handleInputChange('senderNumberOnApp', e.target.value)}
-                  placeholder="e.g., 6591234567"
+                  placeholder="Sender number"
                 />
               </div>
             </div>
 
-            {/* Address Section */}
+            {/* Delivery Address Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-olive-600">Address Information</h3>
+              <h3 className="text-lg font-semibold text-olive-600">Delivery Address</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="address">Address</Label>
                   <Textarea
                     id="address"
@@ -245,6 +310,7 @@ export function AddOrder({
                     onChange={(e) => handleInputChange('address', e.target.value)}
                     placeholder="Full delivery address"
                     required
+                    className="min-h-[80px]"
                   />
                 </div>
 
@@ -353,13 +419,7 @@ export function AddOrder({
                     placeholder="e.g., WF"
                   />
                 </div>
-              </div>
-            </div>
 
-            {/* Item Information Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-olive-600">Item Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="noOfShippingLabels">No. of Shipping Labels</Label>
                   <Input
@@ -371,41 +431,85 @@ export function AddOrder({
                     min="1"
                   />
                 </div>
+              </div>
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="itemCount">Item Count</Label>
-                  <Input
-                    id="itemCount"
-                    type="number"
-                    value={orderData.itemCount}
-                    onChange={(e) => handleInputChange('itemCount', e.target.value)}
-                    placeholder="1"
-                    min="1"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    value={orderData.description}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    placeholder="Item description"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="qty">Qty</Label>
-                  <Input
-                    id="qty"
-                    type="number"
-                    value={orderData.qty}
-                    onChange={(e) => handleInputChange('qty', e.target.value)}
-                    placeholder="1"
-                    min="1"
-                  />
+            {/* Items Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-olive-600">Order Items</h3>
+                <div className="text-sm text-muted-foreground">
+                  Total Quantity: <span className="font-medium">{getTotalQuantity()}</span>
                 </div>
               </div>
+              
+              {orderData.items.map((item, index) => (
+                <Card key={index} className="border-l-4 border-l-olive-500">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm">Item {index + 1}</CardTitle>
+                      {orderData.items.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeItem(index)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`sku-${index}`}>SKU</Label>
+                        <Input
+                          id={`sku-${index}`}
+                          value={item.sku}
+                          onChange={(e) => handleItemChange(index, 'sku', e.target.value)}
+                          placeholder="e.g., ITEM-001"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor={`description-${index}`}>Description</Label>
+                        <Input
+                          id={`description-${index}`}
+                          value={item.description}
+                          onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                          placeholder="Item description"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor={`qty-${index}`}>Quantity</Label>
+                        <Input
+                          id={`qty-${index}`}
+                          type="number"
+                          value={item.qty}
+                          onChange={(e) => handleItemChange(index, 'qty', parseInt(e.target.value) || 1)}
+                          placeholder="1"
+                          min="1"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addItem}
+                className="w-full border-dashed border-2 border-olive-300 text-olive-600 hover:bg-olive-50"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Another Item
+              </Button>
             </div>
 
             {/* Submit Result */}
@@ -434,7 +538,7 @@ export function AddOrder({
                 ) : (
                   <>
                     <Plus className="mr-2 h-4 w-4" />
-                    Create Order
+                    Create Order ({orderData.items.length} item{orderData.items.length !== 1 ? 's' : ''})
                   </>
                 )}
               </Button>

@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.0] - 2025-01-28
+
+### Added
+- **Multi-Item Manual Order Creation** - Enhanced manual order creation to support multiple items within a single order
+- Dynamic item management interface with add/remove functionality for line items
+- Each item can have its own SKU, description, and quantity
+- Automatic total quantity calculation across all items
+- Backend support for processing multi-item manual orders
+- **Guaranteed Detrack Export Compatibility** - Multi-item manual orders export correctly to Detrack as single jobs with multiple items
+
+### Changed
+- Updated AddOrder component with new multi-item interface
+- Enhanced backend manual order processing to create multiple line item rows
+- Improved manual order data structure to match Shopify order patterns
+- Manual orders now export to Detrack using the same proven logic as Shopify orders
+- Backend maintains backward compatibility with single-item manual orders
+
+### Technical Improvements
+- Multi-item orders generate proper line item IDs (e.g., `order-uuid-0`, `order-uuid-1`)
+- Order-level data is duplicated across line items for consistent export behavior
+- Export process groups line items by order ID and creates single Detrack jobs
+- Enhanced manual order form with improved UX for item management
+
 ## [0.21.1] - 22/06/2025
 
 ### Fixed
