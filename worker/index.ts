@@ -718,11 +718,12 @@ async function handleGetOrders(request: Request, db: DatabaseService): Promise<R
 		const limit = parseInt(url.searchParams.get('limit') || '100', 10)
 		const offset = parseInt(url.searchParams.get('offset') || '0', 10)
 
-		// Get total order count
+		// Get total order count (excluding manual orders)
 		const totalCount = await db.getTotalOrderCount()
 
-		// Get paginated orders
-		const orders = await db.getAllOrders(limit, offset)
+		// Get paginated orders (excluding manual orders)
+		const allOrders = await db.getAllOrders(limit, offset)
+		const orders = allOrders.filter(order => order.store_id !== 'manual')
 
 		// The frontend expects a specific format where each DB row (which represents a processed Shopify order)
 		// is transformed. The processed_data field contains a JSON string of an array of line items.
@@ -1212,9 +1213,13 @@ async function handleCreateManualOrder(request: Request, db: DatabaseService): P
 			const manualOrderId = generateManualOrderId()
 			const orderName = orders[0].deliveryOrderNo || `MANUAL-${manualOrderId}`
 			
+			// Determine store_id based on whether this is being transferred or created fresh
+			// If it's transferred from manual orders dashboard, use 'transferred' instead of 'manual'
+			const storeId = requestData.transferred ? 'transferred' : 'manual'
+			
 			// Create order in database with all line items
 			await db.createOrder({
-				store_id: 'manual', // Special store ID for manual orders
+				store_id: storeId, // Use 'transferred' for transferred orders, 'manual' for fresh ones
 				shopify_order_id: manualOrderId,
 				shopify_order_name: orderName,
 				status: 'Ready for Export',
@@ -1242,9 +1247,12 @@ async function handleCreateManualOrder(request: Request, db: DatabaseService): P
 			const manualOrderId = generateManualOrderId()
 			const orderName = requestData.deliveryOrderNo || `MANUAL-${manualOrderId}`
 			
+			// Determine store_id based on whether this is being transferred or created fresh
+			const storeId = requestData.transferred ? 'transferred' : 'manual'
+			
 			// Create order directly in database
 			await db.createOrder({
-				store_id: 'manual', // Special store ID for manual orders
+				store_id: storeId, // Use 'transferred' for transferred orders, 'manual' for fresh ones
 				shopify_order_id: manualOrderId,
 				shopify_order_name: orderName,
 				status: 'Ready for Export',
@@ -1661,10 +1669,17 @@ async function handleExportToDetrack(request: Request, db: DatabaseService): Pro
 		// Process each order group
 		for (const [baseOrderId, group] of orderGroups) {
 			try {
+				console.log(`=== PROCESSING ORDER GROUP ${baseOrderId} ===`)
+				console.log('Group lineItems:', JSON.stringify(group.lineItems, null, 2))
+				console.log('Order name:', group.order.shopify_order_name)
+				
 				// Convert all line items for this order into a single Detrack job
 				const payload = convertMultipleLineItemsToDetrackFormat(group.lineItems, group.order.shopify_order_name)
 				
+				console.log('Converted payload:', JSON.stringify(payload, null, 2))
+				
 				if (payload && payload.data && payload.data[0]) {
+					console.log('Items in payload:', payload.data[0].items)
 					jobs.push(payload.data[0])
 					orderIdMapping.set(jobs.length - 1, group.lineItemIds) // Map job index to line item IDs
 				} else {

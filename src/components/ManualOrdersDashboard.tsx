@@ -235,26 +235,44 @@ export function ManualOrdersDashboard({
     try {
       // Get the selected orders
       const ordersToTransfer = orders.filter((order) => selectedOrders.has(order.id))
+      
+      // Group orders by base order ID (before the -index suffix)
+      const orderGroups = new Map<string, Order[]>()
+      
+      ordersToTransfer.forEach(order => {
+        const baseOrderId = order.id.includes('-') ? order.id.split('-')[0] : order.id
+        if (!orderGroups.has(baseOrderId)) {
+          orderGroups.set(baseOrderId, [])
+        }
+        orderGroups.get(baseOrderId)!.push(order)
+      })
+      
       let successCount = 0
       let errorCount = 0
-      for (const order of ordersToTransfer) {
+      
+      // Transfer each group as a single multi-item order
+      for (const [baseOrderId, groupedOrders] of orderGroups) {
         try {
           const response = await fetch('/api/orders/manual', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(order),
+            body: JSON.stringify({ 
+              orders: groupedOrders,
+              baseOrderId: baseOrderId,
+              transferred: true 
+            }),
             credentials: 'include',
           })
           const result = await response.json()
           if (!response.ok || !result.success) {
             errorCount++
-            console.error('Failed to transfer order:', order, result.error)
+            console.error('Failed to transfer order group:', baseOrderId, result.error)
           } else {
             successCount++
           }
         } catch (err) {
           errorCount++
-          console.error('Error transferring order:', order, err)
+          console.error('Error transferring order group:', baseOrderId, err)
         }
       }
       // Remove successfully transferred orders from manual orders
