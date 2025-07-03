@@ -604,14 +604,14 @@ export function ManualOrdersDashboard({
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Address:</span>
-                          <span className="text-right max-w-[200px] truncate" title={order.address}>
+                          <span className="text-right max-w-[200px] break-words" title={order.address}>
                             {order.address || 'N/A'}
                           </span>
                         </div>
                         {order.description && (
                           <div className="pt-2 border-t">
                             <div className="text-muted-foreground text-xs mb-1">Description:</div>
-                            <div className="text-sm truncate" title={order.description}>
+                            <div className="text-sm break-words" title={order.description}>
                               {order.description}
                             </div>
                           </div>

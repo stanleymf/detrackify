@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.1] - 2025-01-28
+
+### Fixed
+- **Container Display Text Wrapping** - Fixed text truncation issue in Express Orders and Flower Stands cards
+- Replaced `truncate` CSS class with `break-words` to allow text to wrap properly
+- Order numbers like SGF1613 and long descriptions now display fully without being cut off with "..."
+- Improved readability of order information in both Dashboard and Manual Orders Dashboard
+- Fixed text wrapping for addresses and descriptions in mobile card views
+
 ## [0.22.0] - 2025-01-28
 
 ### Added

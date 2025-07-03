@@ -988,11 +988,11 @@ export function Dashboard({
             <div className={`grid gap-3 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
               {expressOrdersArray.map((order, index) => (
                 <div key={index} className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="font-medium text-purple-700 text-sm">{order.deliveryOrderNo}</div>
-                  <div className="text-muted-foreground text-xs truncate" title={order.fullLineItem}>
+                  <div className="font-medium text-purple-700 text-sm break-words">{order.deliveryOrderNo}</div>
+                  <div className="text-muted-foreground text-xs break-words" title={order.fullLineItem}>
                     {order.fullLineItem}
                   </div>
-                  <div className="text-muted-foreground text-xs truncate mt-1" title={order.address}>
+                  <div className="text-muted-foreground text-xs break-words mt-1" title={order.address}>
                     📍 {order.address}
                   </div>
                 </div>
@@ -1019,11 +1019,11 @@ export function Dashboard({
             <div className={`grid gap-3 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
               {flowerStandOrdersArray.map((order, index) => (
                 <div key={index} className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <div className="font-medium text-green-700 text-sm">{order.deliveryOrderNo}</div>
-                  <div className="text-muted-foreground text-xs truncate" title={order.fullLineItem}>
+                  <div className="font-medium text-green-700 text-sm break-words">{order.deliveryOrderNo}</div>
+                  <div className="text-muted-foreground text-xs break-words" title={order.fullLineItem}>
                     {order.fullLineItem}
                   </div>
-                  <div className="text-muted-foreground text-xs truncate mt-1" title={order.address}>
+                  <div className="text-muted-foreground text-xs break-words mt-1" title={order.address}>
                     📍 {order.address}
                   </div>
                 </div>
@@ -1385,14 +1385,14 @@ export function Dashboard({
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Address:</span>
-                          <span className="text-right max-w-[200px] truncate" title={order.address}>
+                          <span className="text-right max-w-[200px] break-words" title={order.address}>
                             {order.address || 'N/A'}
                           </span>
                         </div>
                         {order.description && (
                           <div className="pt-2 border-t">
                             <div className="text-muted-foreground text-xs mb-1">Description:</div>
-                            <div className="text-sm truncate" title={order.description}>
+                            <div className="text-sm break-words" title={order.description}>
                               {order.description}
                             </div>
                           </div>
