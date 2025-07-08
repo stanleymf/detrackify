@@ -165,6 +165,23 @@ export class OrderProcessor {
   }
 
   /**
+   * Filter out removed/cancelled line items
+   * @returns Array of active line items (excluding items with current_quantity = 0)
+   */
+  private getActiveLineItems(): any[] {
+    const lineItems = this.order.line_items || []
+    
+    return lineItems.filter(item => {
+      // Check if current_quantity is 0 (item was reduced to 0)
+      if (item.current_quantity === 0) {
+        return false
+      }
+      
+      return true
+    })
+  }
+
+  /**
    * Process Shopify order and extract all required fields based on mappings.
    */
   processShopifyOrder(): Record<string, string> {
@@ -463,8 +480,11 @@ export class OrderProcessor {
       return '0'
     }
     
+    // Use helper method to get active line items (excluding removed items)
+    const activeLineItems = this.getActiveLineItems()
+    
     if (format === 'sum_quantities') {
-      const totalQuantity = this.order.line_items.reduce((sum, item) => {
+      const totalQuantity = activeLineItems.reduce((sum, item) => {
         const quantity = item.quantity || 0
         return sum + quantity
       }, 0)
@@ -472,8 +492,8 @@ export class OrderProcessor {
       return String(totalQuantity)
     }
     
-    // Default: return number of line items
-    return String(this.order.line_items.length)
+    // Default: return number of active line items (excluding removed items)
+    return String(activeLineItems.length)
   }
 
   /**
@@ -493,19 +513,23 @@ export class OrderProcessor {
   }
 
   /**
-   * Generate description from line items
+   * Generate description from line items (excluding removed items)
    */
   private generateDescription(): string {
-    const lineItems = this.order.line_items || []
-    return lineItems.map(item => `${item.title} - ${item.variant_title || 'Default'}`).join(', ')
+    // Use helper method to get active line items (excluding removed items)
+    const activeLineItems = this.getActiveLineItems()
+    
+    return activeLineItems.map(item => `${item.title} - ${item.variant_title || 'Default'}`).join(', ')
   }
 
   /**
-   * Calculate total item count
+   * Calculate total item count (excluding removed items)
    */
   private calculateItemCount(): string {
-    const lineItems = this.order.line_items || []
-    return lineItems.reduce((total, item) => total + (item.quantity || 0), 0).toString()
+    // Use helper method to get active line items (excluding removed items)
+    const activeLineItems = this.getActiveLineItems()
+    
+    return activeLineItems.reduce((total, item) => total + (item.quantity || 0), 0).toString()
   }
 
   /**

@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.2] - 2025-01-28
+
+### Fixed
+- **Removed Items Logic** - Fixed quantity calculations to properly exclude removed items (current_quantity = 0) from shipping labels and total count
+- **Item Count Accuracy** - Item count now correctly sums only active line items, excluding those that were removed/cancelled after fulfillment
+- **Shipping Labels Count** - Number of shipping labels now reflects only active items, not including removed items in the count
+- **Description Generation** - Order descriptions now only include active items, providing cleaner and more accurate item listings
+
+### Technical Improvements
+- **Consistent Filtering Logic** - Added `getActiveLineItems()` helper method to ensure consistent removed items filtering across all quantity calculations
+- **Enhanced Order Processing** - Updated `calculateItemCount()`, `processLineItems()`, and `generateDescription()` methods to exclude removed items
+- **Detrack Export Accuracy** - Export to Detrack now uses correct item counts and shipping labels, improving delivery accuracy
+- **Code Quality** - Reduced code duplication by centralizing removed items filtering logic
+
+### Impact on Detrack Export
+- **number_of_shipping_labels**: Now correctly excludes removed items from count
+- **Individual item quantities**: Already correct, continues to use only active items
+- **Total item count**: Now accurately reflects only fulfilled items
+
 ## [0.22.1] - 2025-01-28
 
 ### Fixed
