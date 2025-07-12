@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.3] - 2025-01-28
+
+### Fixed
+- **Analytics Driver List Display** - Fixed driver list truncation in stats containers
+- Removed 5-driver limit and "+X more drivers" message that prevented viewing complete driver lists
+- All drivers now display in Morning, Afternoon, Night, and Total time window cards
+- Added scrollable container (max-height: 16rem) to handle long driver lists without breaking layout
+- Improved user experience by showing complete driver breakdown with order counts and status indicators
+
+### Technical Improvements
+- Removed `.slice(0, 5)` limitation in Analytics component driver breakdown display
+- Enhanced driver list rendering to show all drivers instead of truncated view
+- Added `overflow-y-auto` and `max-h-64` classes for better list management
+- Improved driver statistics visibility across all time windows
+
 ## [0.22.2] - 2025-01-28
 
 ### Fixed

@@ -523,8 +523,8 @@ export default function Analytics() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   {data?.driverBreakdown && data.driverBreakdown.length > 0 ? (
-                    <div className="space-y-2">
-                      {data.driverBreakdown.slice(0, 5).map((item: any, idx: number) => (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {data.driverBreakdown.map((item: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center text-sm">
                           <span className="font-medium truncate">{item.driver}</span>
                           <div className="flex items-center gap-2">
@@ -544,11 +544,6 @@ export default function Analytics() {
                           </div>
                         </div>
                       ))}
-                      {data.driverBreakdown.length > 5 && (
-                        <div className="text-xs text-muted-foreground pt-1">
-                          +{data.driverBreakdown.length - 5} more drivers
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <div className="text-sm text-muted-foreground">
